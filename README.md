@@ -1,15 +1,26 @@
 # Texturify Generating Textures on 3D Shape Surfaces
 
+## About
+
+This is the academic project of [KAIST CS479 course](https://mhsung.github.io/kaist-cs479-fall-2023/) in 2023 Fall semester.
+
 ## Dependencies
+
+It is recommended to create a new conda environment:
+
+```commandline
+conda create --name texturify python=3.9
+conda activate texturify
+```
 
 Install python requirements:
 
 ```commandline
+pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
 pip install -r requirements.txt
-pip install torch==1.10.2+cu113 torchvision==0.11.3+cu113 torchaudio==0.10.2+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
 ```
 
-Install trimesh from our fork:
+Install trimesh from the authors' fork:
 ```bash
 cd ~
 git clone git@github.com:nihalsid/trimesh.git
@@ -44,11 +55,14 @@ cd nvdiffrast
 pip install .
 ```
 
-Apart from this, you will need approporiate versions of torch-scatter, torch-sparse, torch-spline-conv, torch-geometric, depending on your torch+cuda combination. E.g. for torch-1.10 + cuda11.3 you'd need:  
+Apart from this, you will need approporiate versions of torch-scatter, torch-sparse, torch-spline-conv, torch-geometric, depending on your torch+cuda combination. E.g. for torch-1.13.1 + cuda11.7 you'd need:  
 
 ```commandline
-pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.10.0+cu113.html
+pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.1+cu117.html --force-reinstall
 ```
+
+Maybe you will need to resolve the conflict using `pip check` command.
+
 ## Dataset
 
 From project root execute:

@@ -1,3 +1,12 @@
+### mine ###
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+from tqdm import tqdm
+import warnings
+warnings.filterwarnings(action='ignore')
+############
+
 import math
 import random
 import shutil
@@ -10,6 +19,7 @@ from pytorch_lightning.utilities import rank_zero_only
 from torch_ema import ExponentialMovingAverage
 from torchvision.utils import save_image
 from cleanfid import fid
+from pytorch_fid import fid_score as fid_2
 
 from dataset.mesh_real_features_patch import FaceGraphMeshDataset
 from dataset import to_vertex_colors_scatter, GraphDataLoader, to_device
@@ -237,26 +247,34 @@ class StyleGAN2Trainer(pl.LightningModule):
             self.export_mesh(odir_meshes)
         with Timer("export_samples"):
             latents = self.grid_z.split(self.config.batch_size)
-            for iter_idx, batch in enumerate(self.val_dataloader()):
-                batch = to_device(batch, self.device)
-                self.set_shape_codes(batch)
-                shape = batch['shape']
-                real_render = batch['real'].cpu()
-                fake_render = self.render(self.G(batch['graph_data'], latents[iter_idx % len(latents)].to(self.device), shape, noise_mode='const'), batch, use_bg_color=False)
-                fake_render = torch.nn.functional.interpolate(fake_render[:, :3, :, :], size=(self.config.image_size, self.config.image_size), mode='bilinear', align_corners=False).cpu()
-                real_render = self.train_set.cspace_convert_back(real_render)
-                fake_render = self.train_set.cspace_convert_back(fake_render)
-                save_image(real_render, odir_samples / f"real_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
-                save_image(fake_render, odir_samples / f"fake_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
-                for batch_idx in range(real_render.shape[0]):
-                    save_image(real_render[batch_idx], odir_real / f"{iter_idx}_{batch_idx}.jpg", value_range=(-1, 1), normalize=True)
+            val_loader = self.val_dataloader()
+            epochs = self.config.num_eval_images // (len(val_loader) * self.config.batch_size)
+            for epoch in range(epochs):
+                for iter_idx, batch in enumerate(self.val_dataloader()):
+                    iter_idx += epoch * epochs
+                    batch = to_device(batch, self.device)
+                    self.set_shape_codes(batch)
+                    shape = batch['shape']
+                    real_render = batch['real'].cpu()
+                    fake_render = self.render(self.G(batch['graph_data'], latents[iter_idx % len(latents)].to(self.device), shape, noise_mode='const'), batch, use_bg_color=False)
+                    fake_render = torch.nn.functional.interpolate(fake_render[:, :3, :, :], size=(self.config.image_size, self.config.image_size), mode='bilinear', align_corners=False).cpu()
+                    real_render = self.train_set.cspace_convert_back(real_render)
+                    fake_render = self.train_set.cspace_convert_back(fake_render)
+                    save_image(real_render, odir_samples / f"real_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+                    save_image(fake_render, odir_samples / f"fake_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+                    for batch_idx in range(real_render.shape[0]):
+                        save_image(real_render[batch_idx], odir_real / f"{iter_idx}_{batch_idx}.jpg", value_range=(-1, 1), normalize=True)
         self.ema.restore([p for p in self.G.parameters() if p.requires_grad])
-        fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
-        print(f'FID: {fid_score:.3f}')
-        kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
-        print(f'KID: {kid_score:.3f}')
-        self.log(f"fid", fid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
-        self.log(f"kid", kid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
+
+        with torch.no_grad():
+            fid_score = fid_2.calculate_fid_given_paths([str(odir_real), str(odir_fake)], batch_size=64, device=self.device, dims=192, num_workers=0)
+            # fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
+            print(f'FID: {fid_score:.3f}')
+            # kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
+            # print(f'KID: {kid_score:.3f}')
+            self.log(f"fid", fid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
+            # self.log(f"kid", kid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True
+
         shutil.rmtree(odir_real.parent)
 
     def get_mapped_latent(self, z, style_mixing_prob):
@@ -287,10 +305,14 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     def export_grid(self, prefix, output_dir_vis, output_dir_fid):
         vis_generated_images = []
-        grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size))
-        for iter_idx, z in enumerate(self.grid_z.split(self.config.batch_size)):
+        grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, drop_last=True))
+        for iter_idx, z in enumerate(tqdm(self.grid_z.split(self.config.batch_size), desc='export_grid:')):
             z = z.to(self.device)
-            eval_batch = to_device(next(grid_loader), self.device)
+            try:
+                eval_batch = to_device(next(grid_loader), self.device)
+            except StopIteration:
+                grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, drop_last=True))
+                eval_batch = to_device(next(grid_loader), self.device)
             self.set_shape_codes(eval_batch)
             fake = self.render(self.G(eval_batch['graph_data'], z, eval_batch['shape'], noise_mode='const'), eval_batch, use_bg_color=False)
             fake = torch.nn.functional.interpolate(fake[:, :3, :, :], size=(self.config.image_size, self.config.image_size), mode='bilinear', align_corners=False).cpu()

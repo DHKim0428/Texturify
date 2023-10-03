@@ -5,6 +5,7 @@ wandb/
 lightning_logs/
 runs/
 runs
+output
 slurm/inference/
 slurm/groups/
 *.pyd

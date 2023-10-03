@@ -1,39 +1,29 @@
-#dataset_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape/CubeTexturesForGraphQuad_gan_FC_processed
-#mesh_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape-model/CubeTexturesForGraphQuad
-#mesh_resolution: 128
-#dataset_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape/CubeTexturePlaneQuad32_FC_processed
-#mesh_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape-model/CubeTexturePlaneQuad32
-#mesh_resolution: 32
-#dataset_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape/CubeTexturesForGraphQuad32_FC_processed
-#mesh_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape-model/CubeTexturesForGraphQuad32
-#mesh_resolution: 64
-
-dataset_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/shapenet-chairs-manifold-highres-part_processed_color
-mesh_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/shapenet-chairs-manifold-highres
-pairmeta_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape-model/metadata/pairs.json
-df_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape-model/shapenet-chairs-manifold
-image_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/exemplars
-mask_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/exemplars_mask
-condition_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/shapenet-chairs-manifold_autoencoder
-stat_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/shapenet-chairs-manifold-highres_stat.pt
-uv_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/uv_map
-silhoutte_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/uv_mask
-normals_path: /cluster/gimli/ysiddiqui/CADTextures/Photoshape/uv_normals
+dataset_path: ./data/Photoshape/shapenet-chairs-manifold-highres-part_processed_color
+mesh_path: ./data/Photoshape/shapenet-chairs-manifold-highres
+pairmeta_path: ./data/Photoshape-model/metadata/pairs.json
+df_path: ./data/Photoshape-model/shapenet-chairs-manifold
+image_path: ./data/Photoshape/exemplars
+mask_path: ./data/Photoshape/exemplars_mask
+condition_path: ./data/Photoshape/shapenet-chairs-manifold_autoencoder
+stat_path: ./data/Photoshape/shapenet-chairs-manifold-highres_stat.pt
+uv_path: ./data/Photoshape/uv_map
+silhoutte_path: ./data/Photoshape/uv_mask
+normals_path: ./data/Photoshape/uv_normals
 mesh_resolution: 64
 
-experiment: fast_dev
+experiment: test_run
 seed: null
-save_epoch: 1
+save_epoch: 100
 sanity_steps: 1
 max_epoch: 2000
 scheduler: null
 val_check_percent: 1.0
-val_check_interval: 1
+val_check_interval: 100
 resume: null
 
 num_mapping_layers: 5
 lr_g: 0.002
-lr_d: 0.00235
+lr_d: 0.001
 lr_e: 0.0001
 lazy_gradient_penalty_interval: 16
 lazy_path_penalty_after: 0
@@ -47,7 +37,7 @@ ada_start_p: 0.  #to disable set to -1
 ada_target: 0.6
 ada_interval: 4
 ada_fixed: False
-g_channel_base: 16384
+g_channel_base: 32768
 d_channel_base: 16384
 d_channel_max: 512
 features: normal
@@ -60,10 +50,10 @@ p_synthetic: 0.0
 #normal+curvature
 #normal+laplacian+ff1+ff2+curvature
 
-random_bg: white
+random_bg: grayscale
 colorspace: rgb
 
-image_size: 128
+image_size: 512
 render_size:
 num_patch_per_view: 4
 patch_size: 64
@@ -77,10 +67,10 @@ num_faces: [24576, 6144, 1536, 384, 96, 24]
 #num_faces: [1024, 256, 64, 16]
 #image_size: 64
 #num_faces: [1536, 384, 96, 24]
-num_eval_images: 2048
-num_vis_images: 1024
+num_eval_images: 256
+num_vis_images: 256
 num_vis_meshes: 64
-batch_size: 16
+batch_size: 4
 views_per_sample: 2
 random_views: False
 num_workers: 8

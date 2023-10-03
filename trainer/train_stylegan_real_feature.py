@@ -1,3 +1,12 @@
+### mine ###
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+from tqdm import tqdm
+import warnings
+warnings.filterwarnings(action='ignore')
+############
+
 import math
 import shutil
 from pathlib import Path
@@ -9,6 +18,7 @@ from pytorch_lightning.utilities import rank_zero_only
 from torch_ema import ExponentialMovingAverage
 from torchvision.utils import save_image
 from cleanfid import fid
+from pytorch_fid import fid_score as fid_2
 
 from dataset.mesh_real_features import FaceGraphMeshDataset
 from dataset import to_vertex_colors_scatter, GraphDataLoader, to_device
@@ -45,7 +55,6 @@ class StyleGAN2Trainer(pl.LightningModule):
         # print_module_summary(self.G, (torch.zeros(self.config.batch_size, self.config.latent_dim), ))
         # print_module_summary(self.D, (torch.zeros(self.config.batch_size, 3, config.image_size, config.image_size), ))
         self.grid_z = torch.randn(config.num_eval_images, self.config.latent_dim)
-
         self.automatic_optimization = False
         self.path_length_penalty = PathLengthPenalty(0.01, 2)
         self.ema = None
@@ -165,32 +174,44 @@ class StyleGAN2Trainer(pl.LightningModule):
         torch.save(self.ema, Path("runs") / self.config.experiment / "checkpoints" / f"ema_{self.global_step:09d}.pth")
         with Timer("export_grid"):
             odir_real, odir_fake, odir_samples, odir_grid, odir_meshes = self.create_directories()
+            print("export_grid1 start")
             self.export_grid("", odir_grid, None)
+            print("export_grid1 end")
             self.ema.store(self.G.parameters())
             self.ema.copy_to([p for p in self.G.parameters() if p.requires_grad])
+            print("export_grid2 start")
             self.export_grid("ema_", odir_grid, odir_fake)
+            print("export_grid2 end")
             self.export_mesh(odir_meshes)
         with Timer("export_samples"):
             latents = self.grid_z.split(self.config.batch_size)
-            for iter_idx, batch in enumerate(self.val_dataloader()):
-                batch = to_device(batch, self.device)
-                self.set_shape_codes(batch)
-                shape = batch['shape']
-                real_render = batch['real'].cpu()
-                fake_render = self.render(self.G(batch['graph_data'], latents[iter_idx % len(latents)].to(self.device), shape, noise_mode='const'), batch, use_bg_color=False).cpu()
-                real_render = self.train_set.cspace_convert_back(real_render)
-                fake_render = self.train_set.cspace_convert_back(fake_render)
-                save_image(real_render, odir_samples / f"real_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
-                save_image(fake_render, odir_samples / f"fake_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
-                for batch_idx in range(real_render.shape[0]):
-                    save_image(real_render[batch_idx], odir_real / f"{iter_idx}_{batch_idx}.jpg", value_range=(-1, 1), normalize=True)
+            val_loader = self.val_dataloader()
+            epochs = self.config.num_eval_images // (len(val_loader) * self.config.batch_size)
+            for epoch in range(epochs):
+                for iter_idx, batch in enumerate(self.val_dataloader()):
+                    iter_idx += epoch * epochs
+                    batch = to_device(batch, self.device)
+                    self.set_shape_codes(batch)
+                    shape = batch['shape']
+                    real_render = batch['real'].cpu()
+                    fake_render = self.render(self.G(batch['graph_data'], latents[iter_idx % len(latents)].to(self.device), shape, noise_mode='const'), batch, use_bg_color=False).cpu()
+                    real_render = self.train_set.cspace_convert_back(real_render)
+                    fake_render = self.train_set.cspace_convert_back(fake_render)
+                    save_image(real_render, odir_samples / f"real_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+                    save_image(fake_render, odir_samples / f"fake_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+                    for batch_idx in range(real_render.shape[0]):
+                        save_image(real_render[batch_idx], odir_real / f"{iter_idx}_{batch_idx}.jpg", value_range=(-1, 1), normalize=True)
         self.ema.restore([p for p in self.G.parameters() if p.requires_grad])
-        fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
-        print(f'FID: {fid_score:.3f}')
-        kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
-        print(f'KID: {kid_score:.3f}')
-        self.log(f"fid", fid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
-        self.log(f"kid", kid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
+        
+        with torch.no_grad():
+            fid_score = fid_2.calculate_fid_given_paths([str(odir_real), str(odir_fake)], batch_size=64, device=self.device, dims=192, num_workers=0)
+            # fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
+            print(f'FID: {fid_score:.3f}')
+            # kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
+            # print(f'KID: {kid_score:.3f}')
+            self.log(f"fid", fid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
+            # self.log(f"kid", kid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
+        
         shutil.rmtree(odir_real.parent)
 
     def get_mapped_latent(self, z, style_mixing_prob):
@@ -221,10 +242,16 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     def export_grid(self, prefix, output_dir_vis, output_dir_fid):
         vis_generated_images = []
-        grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size))
-        for iter_idx, z in enumerate(self.grid_z.split(self.config.batch_size)):
+        grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, drop_last=True))
+        for iter_idx, z in enumerate(tqdm(self.grid_z.split(self.config.batch_size), desc='export_grid:')):
             z = z.to(self.device)
-            eval_batch = to_device(next(grid_loader), self.device)
+            # print("line 233", iter_idx)
+            try:
+                eval_batch = to_device(next(grid_loader), self.device)
+            except StopIteration:
+                grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, drop_last=True))
+                eval_batch = to_device(next(grid_loader), self.device)
+            
             self.set_shape_codes(eval_batch)
             fake = self.render(self.G(eval_batch['graph_data'], z, eval_batch['shape'], noise_mode='const'), eval_batch, use_bg_color=False).cpu()
             fake = self.train_set.cspace_convert_back(fake)
@@ -235,6 +262,7 @@ class StyleGAN2Trainer(pl.LightningModule):
                 vis_generated_images.append(fake)
         torch.cuda.empty_cache()
         vis_generated_images = torch.cat(vis_generated_images, dim=0)
+        print("attempt to save..")
         save_image(vis_generated_images, output_dir_vis / f"{prefix}{self.global_step:06d}.png", nrow=int(math.sqrt(vis_generated_images.shape[0])), value_range=(-1, 1), normalize=True)
 
     def export_mesh(self, outdir):

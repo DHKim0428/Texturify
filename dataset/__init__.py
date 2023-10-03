@@ -104,6 +104,7 @@ class Collater(object):
                 numel = sum([x.numel() for x in batch])
                 # noinspection PyProtectedMember
                 storage = elem.storage()._new_shared(numel)
+                # out = elem.new(storage).resize_(len(batch), *list(elem.size()))
                 out = elem.new(storage)
             return torch.cat(batch, dim, out=out)
         raise NotImplementedError

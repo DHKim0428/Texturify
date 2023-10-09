@@ -99,14 +99,10 @@ Configuration can be overriden with command line flags.
 |`dataset_path`| Directory with processed data||
 |`mesh_path`| Directory with processed mesh (highest res)||
 |`pairmeta_path`| Directory with metadata for image-shape pairs (photoshape specific)||
-|`df_path`| not used anymore ||
 |`image_path`| real images ||
 |`mask_path`| real image segmentation masks ||
-|`condition_path`| not used anymore ||
-|`stat_path`| not used anymore ||
 |`uv_path`| processed uv data (for uv baseline) ||
 |`silhoutte_path`| texture atlas silhoutte data (for uv baseline) ||
-|`mesh_resolution`| not used anymore||
 |`experiment`| Experiment name used for logs |`fast_dev`|
 |`wandb_main`| If false, results logged to "<project>-dev" wandb project (for dev logs)|`False`|
 |`num_mapping_layers`| Number of layers in the mapping network |2|

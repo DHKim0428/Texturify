@@ -11,6 +11,7 @@ slurm/groups/
 *.pyd
 data_processing/sdf_gen/bin
 data_processing/sdf_gen/build
+checkpoint/*
 
 # Editors
 .vscode/

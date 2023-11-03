@@ -558,7 +558,7 @@ def create_interesting_samples_our_gan(config):
 
 
 # Ours
-@hydra.main(config_path='./config', config_name='stylegan2_combined', version_base=None)
+@hydra.main(config_path='../config', config_name='stylegan2_combined', version_base=None)
 def evaluate_our_gan(config):
     from model.graph_generator_u_deep import Generator
     from model.graph import TwinGraphEncoder
@@ -582,9 +582,9 @@ def evaluate_our_gan(config):
     # CHECKPOINT_EMA = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/15021601_StyleGAN23D_fg3bgg-big-lrd1g14-v2m5-1K512/checkpoints/ema_000076439.pth"
     # CHECKPOINT = "../checkpoints/original/chair/_epoch=149.ckpt"
     # CHECKPOINT_EMA = "../checkpoints/original/chair/ema_000065549.pth"
-    CHECKPOINT = "../output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/_epoch=139.ckpt"
-    CHECKPOINT_EMA = "../output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/ema_000254080.pth"
-    device = torch.device("cuda:2")
+    CHECKPOINT = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/_epoch=139.ckpt"
+    CHECKPOINT_EMA = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/ema_000254080.pth"
+    device = torch.device("cuda")
     eval_dataset = FaceGraphMeshDataset(config)
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
 

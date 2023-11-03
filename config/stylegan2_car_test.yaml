@@ -8,15 +8,15 @@
 #mesh_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape-model/CubeTexturesForGraphQuad32
 #mesh_resolution: 64
 
-dataset_path: ./data/CADTextures/CompCars/manifold_combined_processed
-mesh_path: ./data/CADTextures/CompCars/manifold_combined
+dataset_path: ../data/CADTextures/CompCars/manifold_combined_processed
+mesh_path: ../data/CADTextures/CompCars/manifold_combined
 # dataset_path: ./data/CADTextures/CompCars/manifold_combined_processed
 # mesh_path: ./data/CADTextures/CompCars/manifold_combined
-image_path: ./data/CADTextures/CompCars/exemplars_highres
-mask_path: ./data/CADTextures/CompCars/exemplars_highres_mask
-uv_path: ./data/CADTextures/CompCars/uv_map_first
-silhoutte_path: ./data/CADTextures/CompCars/uv_mask
-normals_path: ./data/CADTextures/CompCars/uv_normals
+image_path: ../data/CADTextures/CompCars/exemplars_highres
+mask_path: ../data/CADTextures/CompCars/exemplars_highres_mask
+uv_path: ../data/CADTextures/CompCars/uv_map_first
+silhoutte_path: ../data/CADTextures/CompCars/uv_mask
+normals_path: ../data/CADTextures/CompCars/uv_normals
 
 experiment: fast_dev
 seed: null
@@ -79,7 +79,7 @@ num_vis_meshes: 64
 batch_size: 4
 views_per_sample: 2
 random_views: False
-num_workers: 8
+num_workers: 16
 optimize_lights: False
 optimize_shininess: False
 

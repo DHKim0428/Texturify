@@ -8,29 +8,42 @@
 #mesh_path: /cluster/gimli/ysiddiqui/CADTextures/SingleShape-model/CubeTexturesForGraphQuad32
 #mesh_resolution: 64
 
-dataset_path: ./data/CADTextures/CompCars/manifold_combined_processed
-mesh_path: ./data/CADTextures/CompCars/manifold_combined
-# dataset_path: ./data/CADTextures/CompCars/manifold_combined_processed
-# mesh_path: ./data/CADTextures/CompCars/manifold_combined
-image_path: ./data/CADTextures/CompCars/exemplars_highres
-mask_path: ./data/CADTextures/CompCars/exemplars_highres_mask
-uv_path: ./data/CADTextures/CompCars/uv_map_first
-silhoutte_path: ./data/CADTextures/CompCars/uv_mask
-normals_path: ./data/CADTextures/CompCars/uv_normals
+dataset_path_car: ./data/CADTextures/CompCars/manifold_combined_processed
+dataset_path_chair: ./data/CADTextures/Photoshape/shapenet-chairs-manifold-highres-part_processed_color
+mesh_path_car: ./data/CADTextures/CompCars/manifold_combined
+mesh_path_chair: ./data/CADTextures/Photoshape/shapenet-chairs-manifold-highres
+# dataset_path_car: ./data/CADTextures/CompCars/manifold_combined_processed
+# mesh_path_car: ./data/CADTextures/CompCars/manifold_combined
+image_path_car: ./data/CADTextures/CompCars/exemplars_highres
+image_path_chair: ./data/CADTextures/Photoshape/exemplars
+mask_path_car: ./data/CADTextures/CompCars/exemplars_highres_mask
+mask_path_chair: ./data/CADTextures/Photoshape/exemplars_mask
+uv_path_car: ./data/CADTextures/CompCars/uv_map_first
+uv_path_chair: ./data/CADTextures/Photoshape/uv_map
+silhoutte_path_car: ./data/CADTextures/CompCars/uv_mask
+silhoutte_path_chair: ./data/CADTextures/Photoshape/uv_mask
+normals_path_car: ./data/CADTextures/CompCars/uv_normals
+normals_path_chair: ./data/CADTextures/Photoshape/uv_normals
+
+# [Chair]
+pairmeta_path_chair: ./data/CADTextures/Photoshape-model/metadata/pairs.json
+df_path_chair: ./data/CADTextures/Photoshape-model/shapenet-chairs-manifold
+condition_path_chair: ./data/CADTextures/Photoshape/shapenet-chairs-manifold_autoencoder
+stat_path_chair: ./data/CADTextures/Photoshape/shapenet-chairs-manifold-highres_stat.pt
 
 experiment: fast_dev
 seed: null
-save_epoch: 1
+save_epoch: 5
 sanity_steps: 1
-max_epoch: 5000
+max_epoch: 2000
 scheduler: null
 val_check_percent: 1.0
-val_check_interval: 1
+val_check_interval: 5
 resume: null
 
 num_mapping_layers: 5
 lr_g: 0.002
-lr_d: 0.00235
+lr_d: 0.001
 lr_e: 0.0001
 lazy_gradient_penalty_interval: 16
 lazy_path_penalty_after: 0
@@ -44,15 +57,16 @@ ada_start_p: 0.  #to disable set to -1
 ada_target: 0.6
 ada_interval: 4
 ada_fixed: False
-g_channel_base: 16384
+g_channel_base: 32768
 d_channel_base: 16384
+d_channel_max: 512
 features: normal
 p_synthetic: 0.0
 
 random_bg: grayscale
 colorspace: rgb
 
-image_size: 128
+image_size: 512
 render_size: null
 
 #progressive_switch: [10e3, 70e3, 180e3]
@@ -67,19 +81,20 @@ patch_size: 64
 image_size_hres: 512
 erode: True
 camera_noise: 0.0
+resume_ema: null
 
 num_faces: [24576, 6144, 1536, 384, 96, 24]
 #image_size: 32
 #num_faces: [1024, 256, 64, 16]
 #image_size: 64
 #num_faces: [1536, 384, 96, 24]
-num_eval_images: 2048
-num_vis_images: 1024
+num_eval_images: 256
+num_vis_images: 256
 num_vis_meshes: 64
 batch_size: 4
 views_per_sample: 2
 random_views: False
-num_workers: 8
+num_workers: 16
 optimize_lights: False
 optimize_shininess: False
 
@@ -101,7 +116,6 @@ create_new_resume: False
 
 wandb_main: False
 suffix: ''
-resume_ema: null
 
 preload: False
 

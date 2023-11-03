@@ -170,8 +170,9 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     @rank_zero_only
     def validation_epoch_end(self, _val_step_outputs):
+        # return
         (Path("runs") / self.config.experiment / "checkpoints").mkdir(exist_ok=True)
-        torch.save(self.ema, Path("runs") / self.config.experiment / "checkpoints" / f"ema_{self.global_step:09d}.pth")
+        torch.save(self.ema.state_dict(), Path("runs") / self.config.experiment / "checkpoints" / f"ema_{self.global_step:09d}.pth")
         with Timer("export_grid"):
             odir_real, odir_fake, odir_samples, odir_grid, odir_meshes = self.create_directories()
             print("export_grid1 start")
@@ -245,7 +246,6 @@ class StyleGAN2Trainer(pl.LightningModule):
         grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, drop_last=True))
         for iter_idx, z in enumerate(tqdm(self.grid_z.split(self.config.batch_size), desc='export_grid:')):
             z = z.to(self.device)
-            # print("line 233", iter_idx)
             try:
                 eval_batch = to_device(next(grid_loader), self.device)
             except StopIteration:
@@ -262,7 +262,6 @@ class StyleGAN2Trainer(pl.LightningModule):
                 vis_generated_images.append(fake)
         torch.cuda.empty_cache()
         vis_generated_images = torch.cat(vis_generated_images, dim=0)
-        print("attempt to save..")
         save_image(vis_generated_images, output_dir_vis / f"{prefix}{self.global_step:06d}.png", nrow=int(math.sqrt(vis_generated_images.shape[0])), value_range=(-1, 1), normalize=True)
 
     def export_mesh(self, outdir):
@@ -273,6 +272,7 @@ class StyleGAN2Trainer(pl.LightningModule):
                 eval_batch = to_device(next(grid_loader), self.device)
                 self.set_shape_codes(eval_batch)
                 generated_colors = self.G(eval_batch['graph_data'], z, eval_batch['shape'], noise_mode='const')
+                # generated_colors = torch.clamp(self.G(eval_batch['graph_data'], z, eval_batch['shape'], noise_mode='const'), -1, 1) # change it tomorrow
                 generated_colors = self.train_set.cspace_convert_back(generated_colors) * 0.5 + 0.5
                 for bidx in range(generated_colors.shape[0] // self.config.num_faces[0]):
                     self.train_set.export_mesh(eval_batch['name'][bidx],

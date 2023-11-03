@@ -11,7 +11,9 @@ import wandb
 from pytorch_lightning import seed_everything, Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.plugins import DDPPlugin
+# from pytorch_lightning.plugins import DDPPlugin
+# from pytorch_lightning.strategies import DDPStrategy
+from pytorch_lightning.strategies.ddp import DDPStrategy
 
 from util.filesystem_logger import FilesystemLogger
 
@@ -81,8 +83,11 @@ def create_trainer(name, config):
 
         # config.val_check_interval *= gpu_count
         trainer = Trainer(gpus=-1,
-                          accelerator='ddp',
-                          plugins=DDPPlugin(find_unused_parameters=True),
+                        #   accelerator='ddp',
+                        #   plugins=DDPPlugin(find_unused_parameters=True),
+                          accelerator='gpu',
+                          strategy=DDPStrategy(find_unused_parameters=True), # Changed: DDPPlugin is not used anymore
+                        #   devices="auto",
                           num_sanity_val_steps=config.sanity_steps,
                           max_epochs=config.max_epoch,
                           limit_val_batches=config.val_check_percent,

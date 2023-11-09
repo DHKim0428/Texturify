@@ -20,7 +20,7 @@ import hydra
 
 from util.misc import get_parameters_from_state_dict
 
-OUTPUT_DIR = Path("../output")
+OUTPUT_DIR = Path("./output")
 REAL_DIR = Path("/cluster_HDD/gondor/ysiddiqui/surface_gan_eval/photoshape/real")
 
 
@@ -558,7 +558,7 @@ def create_interesting_samples_our_gan(config):
 
 
 # Ours
-@hydra.main(config_path='../config', config_name='stylegan2_test', version_base=None)
+@hydra.main(config_path='../config', config_name='stylegan2', version_base=None)
 def evaluate_our_gan(config):
     from model.graph_generator_u_deep import Generator
     from model.graph import TwinGraphEncoder
@@ -572,19 +572,19 @@ def evaluate_our_gan(config):
     # config.num_mapping_layers = 5
     # config.g_channel_base = 32768
     # config.g_channel_max = 768
-    config.dataset_path = "../data/CADTextures/Photoshape/shapenet-chairs-manifold-highres-part_processed_color"
+    # config.dataset_path = "../data/CADTextures/Photoshape/shapenet-chairs-manifold-highres-part_processed_color"
     num_latent = 1
 
     # OUTPUT_DIR_OURS = OUTPUT_DIR / f"ours_256-2_{config.views_per_sample}_{num_latent}"
-    OUTPUT_DIR_OURS = OUTPUT_DIR / f"27101203_{config.views_per_sample}_{num_latent}"
+    OUTPUT_DIR_OURS = OUTPUT_DIR / f"28101158_chairs"
     OUTPUT_DIR_OURS.mkdir(exist_ok=True, parents=True)
-    # CHECKPOINT = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/15021601_StyleGAN23D_fg3bgg-big-lrd1g14-v2m5-1K512/checkpoints/_epoch=119.ckpt"
-    # CHECKPOINT_EMA = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/15021601_StyleGAN23D_fg3bgg-big-lrd1g14-v2m5-1K512/checkpoints/ema_000076439.pth"
     # CHECKPOINT = "../checkpoints/original/chair/_epoch=149.ckpt"
     # CHECKPOINT_EMA = "../checkpoints/original/chair/ema_000065549.pth"
-    CHECKPOINT = "../output/27101203_StyleGAN23D_test_run/checkpoints/_epoch=149.ckpt"
-    CHECKPOINT_EMA = "../output/27101203_StyleGAN23D_test_run/checkpoints/ema_000218400.pth"
-    device = torch.device("cuda:0")
+    # CHECKPOINT = "../output/27101203_StyleGAN23D_test_run/checkpoints/_epoch=149.ckpt"
+    # CHECKPOINT_EMA = "../output/27101203_StyleGAN23D_test_run/checkpoints/ema_000218400.pth"
+    CHECKPOINT = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/_epoch=139.ckpt"
+    CHECKPOINT_EMA = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/ema_000254080.pth"
+    device = torch.device("cuda")
     eval_dataset = FaceGraphMeshDataset(config)
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
 

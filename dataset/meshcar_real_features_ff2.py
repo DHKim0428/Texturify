@@ -11,7 +11,7 @@ import torch_scatter
 import torchvision.transforms as T
 import trimesh
 from PIL import Image
-from torchvision.io import read_image
+from torchvision.io import read_image, ImageReadMode
 from torchvision.transforms import InterpolationMode
 from tqdm import tqdm
 from skimage import color
@@ -143,7 +143,8 @@ class FaceGraphMeshDataset(torch.utils.data.Dataset):
             masks.append(self.get_real_mask(c_i))
             azimuth = c_v['azimuth'] + (random.random() - 0.5) * self.camera_noise
             elevation = c_v['elevation'] + (random.random() - 0.5) * self.camera_noise
-            perspective_cam = spherical_coord_to_cam(c_v['fov'], azimuth, elevation, cam_dist=c_v['cam_dist'])
+            # perspective_cam = spherical_coord_to_cam(c_v['fov'], azimuth, elevation, cam_dist=c_v['cam_dist'])
+            perspective_cam = spherical_coord_to_cam(c_v['fov'], azimuth, elevation)
             projection_matrix = torch.from_numpy(perspective_cam.projection_mat()).float()
             cam_position = torch.from_numpy(np.linalg.inv(perspective_cam.view_mat())[:3, 3]).float()
             view_matrix = torch.from_numpy(perspective_cam.view_mat()).float()
@@ -170,7 +171,7 @@ class FaceGraphMeshDataset(torch.utils.data.Dataset):
 
     def process_real_image(self, path):
         pad_size = int(self.image_size * 0.1)
-        resize = T.Resize(size=(self.image_size - 2 * pad_size, self.image_size - 2 * pad_size), interpolation=InterpolationMode.BICUBIC)
+        resize = T.Resize(size=(self.image_size - 2 * pad_size, self.image_size - 2 * pad_size), interpolation=InterpolationMode.LANCZOS)
         pad = T.Pad(padding=(pad_size, pad_size), fill=1)
         t_image = pad(torch.from_numpy(np.array(resize(Image.open(str(path)))).transpose((2, 0, 1))).float() / 127.5 - 1)
         return self.cspace_convert(t_image.unsqueeze(0))
@@ -200,12 +201,11 @@ class FaceGraphMeshDataset(torch.utils.data.Dataset):
         pad_size = int(self.image_size * 0.1)
         resize = T.Resize(size=(self.image_size - 2 * pad_size, self.image_size - 2 * pad_size), interpolation=InterpolationMode.NEAREST)
         pad = T.Pad(padding=(pad_size, pad_size), fill=0)
-        mask_im = read_image(str(path))[:1, :, :]
         if self.erode:
-            eroded_mask = self.erode_mask(mask_im)
+            eroded_mask = self.erode_mask(read_image(str(path), ImageReadMode.GRAY))
         else:
-            eroded_mask = mask_im
-        t_mask = pad(resize((eroded_mask > 128).float()))
+            eroded_mask = read_image(str(path), ImageReadMode.GRAY)
+        t_mask = pad(resize((eroded_mask > 0).float()))
         return t_mask.unsqueeze(0)
 
     def load_pair_meta(self, pairmeta_path):
@@ -299,25 +299,42 @@ def white(num_views):
 
 def get_car_views():
     # front, back, right, left, front_right, front_left, back_right, back_left
-    camera_distance = [3.2, 3.2, 1.7, 1.7, 1.5, 1.5, 1.5, 1.5]
-    fov = [10, 10, 40, 40, 40, 40, 40, 40]
+    # camera_distance = [3.2, 3.2, 1.7, 1.7, 1.5, 1.5, 1.5, 1.5]
+    # fov = [10, 10, 40, 40, 40, 40, 40, 40]
+    # azimuth = [3 * math.pi / 2, math.pi / 2,
+    #            0, math.pi,
+    #            math.pi + math.pi / 3, 0 - math.pi / 3,
+    #            math.pi / 2 + math.pi / 6, math.pi / 2 - math.pi / 6]
+    # azimuth_noise = [0, 0,
+    #                  0, 0,
+    #                  (random.random() - 0.5) * math.pi / 7, (random.random() - 0.5) * math.pi / 7,
+    #                  (random.random() - 0.5) * math.pi / 7, (random.random() - 0.5) * math.pi / 7,]
+    # elevation = [math.pi / 2, math.pi / 2,
+    #              math.pi / 2, math.pi / 2,
+    #              math.pi / 2 - math.pi / 48, math.pi / 2 - math.pi / 48,
+    #              math.pi / 2 - math.pi / 48, math.pi / 2 - math.pi / 48]
+    # elevation_noise = [-random.random() * math.pi / 32, -random.random() * math.pi / 32,
+    #                    0, 0,
+    #                    -random.random() * math.pi / 28, -random.random() * math.pi / 28,
+    #                    -random.random() * math.pi / 28, -random.random() * math.pi / 28,]
+    # return [{'azimuth': a + an, 'elevation': e + en, 'fov': f, 'cam_dist': cd} for a, an, e, en, cd, f in zip(azimuth, azimuth_noise, elevation, elevation_noise, camera_distance, fov)]
     azimuth = [3 * math.pi / 2, math.pi / 2,
                0, math.pi,
                math.pi + math.pi / 3, 0 - math.pi / 3,
                math.pi / 2 + math.pi / 6, math.pi / 2 - math.pi / 6]
     azimuth_noise = [0, 0,
                      0, 0,
-                     (random.random() - 0.5) * math.pi / 7, (random.random() - 0.5) * math.pi / 7,
-                     (random.random() - 0.5) * math.pi / 7, (random.random() - 0.5) * math.pi / 7,]
+                     (random.random() - 0.5) * math.pi / 8, (random.random() - 0.5) * math.pi / 8,
+                     (random.random() - 0.5) * math.pi / 8, (random.random() - 0.5) * math.pi / 8,]
     elevation = [math.pi / 2, math.pi / 2,
                  math.pi / 2, math.pi / 2,
                  math.pi / 2 - math.pi / 48, math.pi / 2 - math.pi / 48,
                  math.pi / 2 - math.pi / 48, math.pi / 2 - math.pi / 48]
-    elevation_noise = [-random.random() * math.pi / 32, -random.random() * math.pi / 32,
+    elevation_noise = [-random.random() * math.pi / 70, -random.random() * math.pi / 70,
                        0, 0,
-                       -random.random() * math.pi / 28, -random.random() * math.pi / 28,
-                       -random.random() * math.pi / 28, -random.random() * math.pi / 28,]
-    return [{'azimuth': a + an, 'elevation': e + en, 'fov': f, 'cam_dist': cd} for a, an, e, en, cd, f in zip(azimuth, azimuth_noise, elevation, elevation_noise, camera_distance, fov)]
+                       -random.random() * math.pi / 32, -random.random() * math.pi / 32,
+                       0, 0]
+    return [{'azimuth': a + an, 'elevation': e + en, 'fov': 40} for a, an, e, en in zip(azimuth, azimuth_noise, elevation, elevation_noise)]
 
 
 def rgb_to_lab(rgb_normed):

@@ -26,7 +26,7 @@ torch.backends.cudnn.deterministic = False
 
 @hydra.main(config_path='../config', config_name='stylegan2_car')
 def validation_epoch_end(config):
-    odir_fake = Path("./output/ours_vis_interesting")
+    odir_fake = Path("./output/04111209_Car")
     odir_real = Path("./output/cars_real")
     config.image_size = 512
     

@@ -139,3 +139,6 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+killgpu.sh
+pid.txt

@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch_geometric
 import torch_scatter
 import math
@@ -272,6 +273,8 @@ class TwinGraphEncoder(torch.nn.Module):
     def forward(self, x_0, x_1, graph_data):
         level_feats = []
         pool_ctr = 0
+        # print(graph_data['sub_neighborhoods'][0].shape) # torch.Size([24576, 9])
+        # print(graph_data['face_neighborhood'].shape) # torch.Size([98304, 9])
         x_0 = self.enc0_conv_in(x_0)
         x_1 = self.enc1_conv_in(x_1)
         x_0 = self.down0_0_block_0(x_0, graph_data['face_neighborhood'], graph_data['is_pad'][pool_ctr], graph_data['pads'][pool_ctr])
@@ -310,6 +313,30 @@ class TwinGraphEncoder(torch.nn.Module):
 
         return level_feats
 
+class TwinGraphFeature(torch.nn.Module):
+    def __init__(self, in_channels_0, in_channels_1, layer_dims=(32, 64, 64, 128, 128, 128, 256, 256), conv_layer=FaceConv, norm=torch_geometric.nn.BatchNorm, num_classes=2):
+        super().__init__()
+        self.encoder = TwinGraphEncoder(in_channels_0, in_channels_1, layer_dims, conv_layer, norm)
+        self.fc = nn.Linear(24 * layer_dims[-1], num_classes)
+
+    def forward(self, x_0, x_1, graph_data):
+        feature = self.encoder(x_0, x_1, graph_data)
+        output = self.fc(feature[-1].view(4, -1))
+        return feature, output
+
+class TwinGraphFeatureLatent(torch.nn.Module):
+    def __init__(self, in_channels_0, in_channels_1, layer_dims=(32, 64, 64, 128, 128, 128, 256, 256), conv_layer=FaceConv, norm=torch_geometric.nn.BatchNorm, num_classes=2):
+        super().__init__()
+        self.encoder = TwinGraphEncoder(in_channels_0, in_channels_1, layer_dims, conv_layer, norm)
+        self.fc1 = nn.Linear(24 * layer_dims[-1], 256)
+        self.fc2 = nn.Linear(256, num_classes)
+
+    def forward(self, x_0, x_1, graph_data):
+        x = self.encoder(x_0, x_1, graph_data)
+        feature = self.fc1(x[-1].view(4, -1))
+        output = self.fc2(feature)
+        return feature, output
+    
 
 class FResNetBlock(torch.nn.Module):
 

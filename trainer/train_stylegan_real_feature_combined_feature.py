@@ -20,17 +20,17 @@ from torchvision.utils import save_image
 from cleanfid import fid
 from pytorch_fid import fid_score as fid_2
 
-from dataset.meshcar_real_features_ff2 import FaceGraphMeshDataset
+from dataset.mesh_real_features_combined import FaceGraphMeshDataset
 from dataset import to_vertex_colors_scatter, GraphDataLoader, to_device
 from model.augment import AugmentPipe
 from model.differentiable_renderer import DifferentiableRenderer
-from model.graph import TwinGraphEncoder
-# from model.graph_generator_u import Generator
-from model.graph_generator_u_deep import Generator
+from model.graph import TwinGraphEncoder, TwinGraphFeature
+from model.graph_generator_u_deep_feature import Generator
 from model.discriminator import Discriminator
 from model.loss import PathLengthPenalty, compute_gradient_penalty
 from trainer import create_trainer
 from util.timer import Timer
+from util.misc import get_parameters_from_state_dict
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -49,7 +49,10 @@ class StyleGAN2Trainer(pl.LightningModule):
         self.train_set = FaceGraphMeshDataset(config)
         self.val_set = FaceGraphMeshDataset(config, config.num_eval_images)
         self.E = TwinGraphEncoder(self.train_set.num_feats, 1)
-        # self.G = Generator(config.latent_dim, config.latent_dim, config.num_mapping_layers, config.num_faces, 3, channel_base=config.g_channel_base, channel_max=config.g_channel_max)
+        self.F = TwinGraphFeature(self.train_set.num_feats, 1)
+        f_dict = torch.load("./runs/08111238_StyleGAN23D-Feature_fast_dev/checkpoints/_epoch=14.ckpt", map_location=self.device)["state_dict"]
+        self.F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))
+        self.F.eval()
         self.G = Generator(config.latent_dim, config.latent_dim, config.num_mapping_layers, config.num_faces, 3, e_layer_dims=self.E.layer_dims, channel_base=config.g_channel_base, channel_max=config.g_channel_max)
         self.D = Discriminator(config.image_size, 3, w_num_layers=config.num_mapping_layers, mbstd_on=config.mbstd_on, channel_base=config.d_channel_base)
         self.R = None
@@ -135,8 +138,6 @@ class StyleGAN2Trainer(pl.LightningModule):
         self.log("rGP", gp, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
 
     def render(self, face_colors, batch, use_bg_color=True):
-        # rendered_color = self.R.render(batch['vertices'], batch['indices'], to_vertex_colors_scatter(face_colors, batch), batch["ranges"].cpu(), batch['bg'] if use_bg_color else None)
-        # return rendered_color.permute((0, 3, 1, 2))
         rendered_color = self.R.render(batch['vertices'], batch['indices'], to_vertex_colors_scatter(face_colors, batch), batch["ranges"].cpu(), batch['bg'] if use_bg_color else None, resolution=self.config.render_size)
         ret_val = rendered_color.permute((0, 3, 1, 2))
         if self.config.render_size != self.config.image_size:
@@ -174,6 +175,7 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     @rank_zero_only
     def validation_epoch_end(self, _val_step_outputs):
+        return
         (Path("runs") / self.config.experiment / "checkpoints").mkdir(exist_ok=True)
         torch.save(self.ema.state_dict(), Path("runs") / self.config.experiment / "checkpoints" / f"ema_{self.global_step:09d}.pth")
         with Timer("export_grid"):
@@ -187,27 +189,44 @@ class StyleGAN2Trainer(pl.LightningModule):
             self.export_grid("ema_", odir_grid, odir_fake)
             print("export_grid2 end")
             self.export_mesh(odir_meshes)
+        # with Timer("export_samples"):
+        #     latents = self.grid_z.split(self.config.batch_size)
+        #     val_loader = self.val_dataloader()
+        #     epochs = self.config.num_eval_images // (len(val_loader) * self.config.batch_size)
+        #     for epoch in range(epochs):
+        #         for iter_idx, batch in enumerate(self.val_dataloader()):
+        #             iter_idx += epoch * epochs
+        #             batch = to_device(batch, self.device)
+        #             self.set_shape_codes(batch)
+        #             shape = batch['shape']
+        #             real_render = batch['real'].cpu()
+        #             print("real_render: ", real_render)
+        #             fake_render = self.render(self.G(batch['graph_data'], latents[iter_idx % len(latents)].to(self.device), shape, noise_mode='const'), batch, use_bg_color=False).cpu()
+        #             real_render = self.train_set.cspace_convert_back(real_render)
+        #             fake_render = self.train_set.cspace_convert_back(fake_render)
+        #             save_image(real_render, odir_samples / f"real_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+        #             save_image(fake_render, odir_samples / f"fake_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+        #             for batch_idx in range(real_render.shape[0]):
+        #                 save_image(real_render[batch_idx], odir_real / f"{iter_idx}_{batch_idx}.jpg", value_range=(-1, 1), normalize=True)
         with Timer("export_samples"):
             latents = self.grid_z.split(self.config.batch_size)
-            val_loader = self.val_dataloader()
-            epochs = self.config.num_eval_images // (len(val_loader) * self.config.batch_size)
-            for epoch in range(epochs):
-                for iter_idx, batch in enumerate(self.val_dataloader()):
-                    iter_idx += epoch * epochs
-                    batch = to_device(batch, self.device)
-                    self.set_shape_codes(batch)
-                    shape = batch['shape']
-                    real_render = batch['real'].cpu()
-                    fake_render = self.render(self.G(batch['graph_data'], latents[iter_idx % len(latents)].to(self.device), shape, noise_mode='const'), batch, use_bg_color=False).cpu()
-                    real_render = self.train_set.cspace_convert_back(real_render)
-                    fake_render = self.train_set.cspace_convert_back(fake_render)
-                    save_image(real_render, odir_samples / f"real_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
-                    save_image(fake_render, odir_samples / f"fake_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
-                    for batch_idx in range(real_render.shape[0]):
-                        save_image(real_render[batch_idx], odir_real / f"{iter_idx}_{batch_idx}.jpg", value_range=(-1, 1), normalize=True)
+            for iter_idx, batch in enumerate(self.val_dataloader()):
+                batch = to_device(batch, self.device)
+                self.set_shape_codes(batch)
+                shape = batch['shape']
+                real_render = batch['real'].cpu()
+                fake_render = self.render(self.G(batch['graph_data'], latents[iter_idx % len(latents)].to(self.device), shape, noise_mode='const'), batch, use_bg_color=False).cpu()
+                real_render = self.train_set.cspace_convert_back(real_render)
+                fake_render = self.train_set.cspace_convert_back(fake_render)
+                save_image(real_render, odir_samples / f"real_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+                save_image(fake_render, odir_samples / f"fake_{iter_idx}.jpg", value_range=(-1, 1), normalize=True)
+                for batch_idx in range(real_render.shape[0]):
+                    save_image(real_render[batch_idx], odir_real / f"{iter_idx}_{batch_idx}.jpg", value_range=(-1, 1), normalize=True)
         self.ema.restore([p for p in self.G.parameters() if p.requires_grad])
-        
+
         with torch.no_grad():
+            print("odir_real: {}".format(odir_real))
+            print("odir_fake: {}".format(odir_fake))
             fid_score = fid_2.calculate_fid_given_paths([str(odir_real), str(odir_fake)], batch_size=64, device=self.device, dims=192, num_workers=0)
             # fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device=self.device, num_workers=0)
             print(f'FID: {fid_score:.3f}')
@@ -219,14 +238,22 @@ class StyleGAN2Trainer(pl.LightningModule):
         shutil.rmtree(odir_real.parent)
 
     def get_mapped_latent(self, z, style_mixing_prob):
+        # shape: [B, 14, 512]
         if torch.rand(()).item() < style_mixing_prob:
             cross_over_point = int(torch.rand(()).item() * self.G.mapping.num_ws)
             w1 = self.G.mapping(z[0])[:, :cross_over_point, :]
             w2 = self.G.mapping(z[1], skip_w_avg_update=True)[:, cross_over_point:, :]
+            # print(torch.cat((w1, w2), dim=1).shape)
             return torch.cat((w1, w2), dim=1)
         else:
             w = self.G.mapping(z[0])
+            # print(w.shape)
             return w
+        # ### NEW ###
+        # feature, _ = self.F(batch['x'], batch['graph_data']['ff2_maps'][0], batch['graph_data'])
+        # # for c, f in zip(code, feature):
+        # #     print(c.shape, f.shape, torch.cat([c, f], dim=1).shape)
+        # batch['shape'] = [torch.cat([c, f], dim=1) for c, f in zip(code, feature)]
 
     def latent(self, limit_batch_size=False):
         batch_size = self.config.batch_size if not limit_batch_size else self.config.batch_size // self.path_length_penalty.pl_batch_shrink
@@ -236,7 +263,10 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     def set_shape_codes(self, batch):
         code = self.E(batch['x'], batch['graph_data']['ff2_maps'][0], batch['graph_data'])
-        batch['shape'] = code
+        # batch['shape'] = code
+        ### NEW ###
+        feature, _ = self.F(batch['x'], batch['graph_data']['ff2_maps'][0], batch['graph_data'])
+        batch['shape'] = [c+f for c, f in zip(code, feature)]
 
     def train_dataloader(self):
         return GraphDataLoader(self.train_set, self.config.batch_size, shuffle=True, pin_memory=True, drop_last=True, num_workers=self.config.num_workers)
@@ -246,14 +276,13 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     def export_grid(self, prefix, output_dir_vis, output_dir_fid):
         vis_generated_images = []
-        grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, drop_last=True))
+        grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, shuffle=True, drop_last=True))
         for iter_idx, z in enumerate(tqdm(self.grid_z.split(self.config.batch_size), desc='export_grid:')):
             z = z.to(self.device)
-            # eval_batch = to_device(next(grid_loader), self.device)
             try:
                 eval_batch = to_device(next(grid_loader), self.device)
             except StopIteration:
-                grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, drop_last=True))
+                grid_loader = iter(GraphDataLoader(self.train_set, batch_size=self.config.batch_size, shuffle=True, drop_last=True))
                 eval_batch = to_device(next(grid_loader), self.device)
             
             self.set_shape_codes(eval_batch)
@@ -279,7 +308,8 @@ class StyleGAN2Trainer(pl.LightningModule):
                 generated_colors = self.train_set.cspace_convert_back(generated_colors) * 0.5 + 0.5
                 for bidx in range(generated_colors.shape[0] // self.config.num_faces[0]):
                     self.train_set.export_mesh(eval_batch['name'][bidx],
-                                               generated_colors[self.config.num_faces[0] * bidx: self.config.num_faces[0] * (bidx + 1)], outdir / f"{eval_batch['name'][bidx]}.obj")
+                                               generated_colors[self.config.num_faces[0] * bidx: self.config.num_faces[0] * (bidx + 1)], outdir / f"{eval_batch['name'][bidx]}.obj",
+                                               eval_batch['category'])
 
     def create_directories(self):
         output_dir_fid_real = Path(f'runs/{self.config.experiment}/fid/real')
@@ -314,9 +344,9 @@ def step(opt, module):
     opt.step()
 
 
-@hydra.main(config_path='../config', config_name='stylegan2_car')
+@hydra.main(config_path='../config', config_name='stylegan2_combined')
 def main(config):
-    trainer = create_trainer("StyleGAN23D-CompCars", config)
+    trainer = create_trainer("StyleGAN23D-Combined-Feature-sum", config)
     model = StyleGAN2Trainer(config)
     trainer.fit(model)
 

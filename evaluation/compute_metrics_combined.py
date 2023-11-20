@@ -576,14 +576,14 @@ def evaluate_our_gan(config):
     num_latent = 1
 
     # OUTPUT_DIR_OURS = OUTPUT_DIR / f"ours_256-2_{config.views_per_sample}_{num_latent}"
-    OUTPUT_DIR_OURS = OUTPUT_DIR / f"28101158_{config.views_per_sample}_{num_latent}"
+    OUTPUT_DIR_OURS = OUTPUT_DIR / f"12110622_{config.views_per_sample}_{num_latent}"
     OUTPUT_DIR_OURS.mkdir(exist_ok=True, parents=True)
     # CHECKPOINT = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/15021601_StyleGAN23D_fg3bgg-big-lrd1g14-v2m5-1K512/checkpoints/_epoch=119.ckpt"
     # CHECKPOINT_EMA = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/15021601_StyleGAN23D_fg3bgg-big-lrd1g14-v2m5-1K512/checkpoints/ema_000076439.pth"
     # CHECKPOINT = "../checkpoints/original/chair/_epoch=149.ckpt"
     # CHECKPOINT_EMA = "../checkpoints/original/chair/ema_000065549.pth"
-    CHECKPOINT = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/_epoch=139.ckpt"
-    CHECKPOINT_EMA = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/ema_000254080.pth"
+    CHECKPOINT = "./output/12110622_StyleGAN23D-Combined-Feature-sum_fast_dev/checkpoints/_epoch=89.ckpt"
+    CHECKPOINT_EMA = "./output/12110622_StyleGAN23D-Combined-Feature-sum_fast_dev/checkpoints/ema_000163337.pth"
     device = torch.device("cuda")
     eval_dataset = FaceGraphMeshDataset(config)
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)

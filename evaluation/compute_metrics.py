@@ -562,7 +562,7 @@ def create_interesting_samples_our_gan(config):
 def evaluate_our_gan(config):
     from model.graph_generator_u_deep import Generator
     from model.graph import TwinGraphEncoder
-    from dataset.mesh_real_features import FaceGraphMeshDataset
+    from dataset.mesh_real_features import FaceGraphMeshDataset    
     from torch_ema import ExponentialMovingAverage
     # config.batch_size = 4
     # config.views_per_sample = 4
@@ -576,14 +576,14 @@ def evaluate_our_gan(config):
     num_latent = 1
 
     # OUTPUT_DIR_OURS = OUTPUT_DIR / f"ours_256-2_{config.views_per_sample}_{num_latent}"
-    OUTPUT_DIR_OURS = OUTPUT_DIR / f"28101158_chairs"
+    OUTPUT_DIR_OURS = OUTPUT_DIR / f"12110622_chairs"
     OUTPUT_DIR_OURS.mkdir(exist_ok=True, parents=True)
     # CHECKPOINT = "../checkpoints/original/chair/_epoch=149.ckpt"
     # CHECKPOINT_EMA = "../checkpoints/original/chair/ema_000065549.pth"
     # CHECKPOINT = "../output/27101203_StyleGAN23D_test_run/checkpoints/_epoch=149.ckpt"
     # CHECKPOINT_EMA = "../output/27101203_StyleGAN23D_test_run/checkpoints/ema_000218400.pth"
-    CHECKPOINT = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/_epoch=139.ckpt"
-    CHECKPOINT_EMA = "./output/28101158_StyleGAN23D-Combined_fast_dev/checkpoints/ema_000254080.pth"
+    CHECKPOINT = "./output/12110622_StyleGAN23D-Combined-Feature-sum_fast_dev/checkpoints/_epoch=89.ckpt"
+    CHECKPOINT_EMA = "./output/12110622_StyleGAN23D-Combined-Feature-sum_fast_dev/checkpoints/ema_000163337.pth"
     device = torch.device("cuda")
     eval_dataset = FaceGraphMeshDataset(config)
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)

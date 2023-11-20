@@ -34,7 +34,7 @@ class StyleGAN2Trainer(pl.LightningModule):
         self.config = config
         self.train_set = FaceGraphMeshDataset(config)
         self.val_set = FaceGraphMeshDataset(config, config.num_eval_images)
-        self.F = TwinGraphFeatureLatent(self.train_set.num_feats, 1)
+        self.F = TwinGraphFeatureLatent(self.train_set.num_feats, 1, batch_size=config.batch_size)
         self.automatic_optimization = False
         self.train_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=2)
         self.val_acc = torchmetrics.classification.Accuracy(task="multiclass", num_classes=2)

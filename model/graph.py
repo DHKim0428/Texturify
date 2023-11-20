@@ -314,26 +314,28 @@ class TwinGraphEncoder(torch.nn.Module):
         return level_feats
 
 class TwinGraphFeature(torch.nn.Module):
-    def __init__(self, in_channels_0, in_channels_1, layer_dims=(32, 64, 64, 128, 128, 128, 256, 256), conv_layer=FaceConv, norm=torch_geometric.nn.BatchNorm, num_classes=2):
+    def __init__(self, in_channels_0, in_channels_1, layer_dims=(32, 64, 64, 128, 128, 128, 256, 256), conv_layer=FaceConv, norm=torch_geometric.nn.BatchNorm, num_classes=2, batch_size=4):
         super().__init__()
         self.encoder = TwinGraphEncoder(in_channels_0, in_channels_1, layer_dims, conv_layer, norm)
         self.fc = nn.Linear(24 * layer_dims[-1], num_classes)
+        self.batch_size = batch_size
 
     def forward(self, x_0, x_1, graph_data):
         feature = self.encoder(x_0, x_1, graph_data)
-        output = self.fc(feature[-1].view(4, -1))
+        output = self.fc(feature[-1].view(self.batch_size, -1))
         return feature, output
 
 class TwinGraphFeatureLatent(torch.nn.Module):
-    def __init__(self, in_channels_0, in_channels_1, layer_dims=(32, 64, 64, 128, 128, 128, 256, 256), conv_layer=FaceConv, norm=torch_geometric.nn.BatchNorm, num_classes=2):
+    def __init__(self, in_channels_0, in_channels_1, layer_dims=(32, 64, 64, 128, 128, 128, 256, 256), conv_layer=FaceConv, norm=torch_geometric.nn.BatchNorm, num_classes=2, batch_size=4):
         super().__init__()
         self.encoder = TwinGraphEncoder(in_channels_0, in_channels_1, layer_dims, conv_layer, norm)
         self.fc1 = nn.Linear(24 * layer_dims[-1], 256)
         self.fc2 = nn.Linear(256, num_classes)
+        self.batch_size = batch_size
 
     def forward(self, x_0, x_1, graph_data):
         x = self.encoder(x_0, x_1, graph_data)
-        feature = self.fc1(x[-1].view(4, -1))
+        feature = self.fc1(x[-1].view(self.batch_size, -1))
         output = self.fc2(feature)
         return feature, output
     

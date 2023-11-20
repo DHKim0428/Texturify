@@ -217,7 +217,7 @@ def evaluate_our_gan(config):
     num_latent = 4
 
     # OUTPUT_DIR_OURS = OUTPUT_DIR / f"ours_256_pres49K_{config.views_per_sample}_{num_latent}"
-    OUTPUT_DIR_OURS = OUTPUT_DIR / f"04111209_Car"
+    OUTPUT_DIR_OURS = OUTPUT_DIR / f"12110622_Car"
     OUTPUT_DIR_OURS.mkdir(exist_ok=True, parents=True)
     # CHECKPOINT = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/24021538_StyleGAN23D-CompCars_bigdtwin-res-lrd1g14-v2m8-1K_128/checkpoints/_epoch=89.ckpt"
     # CHECKPOINT_EMA = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/24021538_StyleGAN23D-CompCars_bigdtwin-res-lrd1g14-v2m8-1K_128/checkpoints/ema_000014129.pth"
@@ -226,8 +226,8 @@ def evaluate_our_gan(config):
     # CHECKPOINT = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/21021429_StyleGAN23D-CompCars_progressive_clip_fg3bgg-lrd1g14-v4m5-1K_512/checkpoints/_epoch=449.ckpt"
     # CHECKPOINT_EMA = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/21021429_StyleGAN23D-CompCars_progressive_clip_fg3bgg-lrd1g14-v4m5-1K_512/checkpoints/ema_000070649.pth"
 
-    CHECKPOINT = "./output/04111209_StyleGAN23D-CompCars_fast_dev/checkpoints/_epoch=449.ckpt"
-    CHECKPOINT_EMA = "./output/04111209_StyleGAN23D-CompCars_fast_dev/checkpoints/ema_000161485.pth"
+    CHECKPOINT = "./output/12110622_StyleGAN23D-Combined-Feature-sum_fast_dev/checkpoints/_epoch=89.ckpt"
+    CHECKPOINT_EMA = "./output/12110622_StyleGAN23D-Combined-Feature-sum_fast_dev/checkpoints/ema_000163337.pth"
     
     device = torch.device("cuda:0")
     eval_dataset = FaceGraphMeshDataset(config)

@@ -24,13 +24,12 @@ from dataset.mesh_real_features_combined import FaceGraphMeshDataset
 from dataset import to_vertex_colors_scatter, GraphDataLoader, to_device
 from model.augment import AugmentPipe
 from model.differentiable_renderer import DifferentiableRenderer
-from model.graph import TwinGraphEncoder, TwinGraphFeature
-from model.graph_generator_u_deep_feature import Generator
-from model.discriminator import Discriminator
+from model.graph import TwinGraphEncoder
+from model.graph_generator_u_deep import Generator
+from model.discriminator import DiscriminatorMultiClass
 from model.loss import PathLengthPenalty, compute_gradient_penalty
 from trainer import create_trainer
 from util.timer import Timer
-from util.misc import get_parameters_from_state_dict
 
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
@@ -49,12 +48,8 @@ class StyleGAN2Trainer(pl.LightningModule):
         self.train_set = FaceGraphMeshDataset(config)
         self.val_set = FaceGraphMeshDataset(config, config.num_eval_images)
         self.E = TwinGraphEncoder(self.train_set.num_feats, 1)
-        self.F = TwinGraphFeature(self.train_set.num_feats, 1)
-        f_dict = torch.load("./runs/08111238_StyleGAN23D-Feature_fast_dev/checkpoints/_epoch=14.ckpt", map_location=self.device)["state_dict"]
-        self.F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))
-        self.F.eval()
         self.G = Generator(config.latent_dim, config.latent_dim, config.num_mapping_layers, config.num_faces, 3, e_layer_dims=self.E.layer_dims, channel_base=config.g_channel_base, channel_max=config.g_channel_max)
-        self.D = Discriminator(config.image_size, 3, w_num_layers=config.num_mapping_layers, mbstd_on=config.mbstd_on, channel_base=config.d_channel_base)
+        self.D = DiscriminatorMultiClass(config.image_size, 3, w_num_layers=config.num_mapping_layers, mbstd_on=config.mbstd_on, channel_base=config.d_channel_base)
         self.R = None
         self.augment_pipe = AugmentPipe(config.ada_start_p, config.ada_target, config.ada_interval, config.ada_fixed, config.batch_size, config.views_per_sample, config.colorspace)
         # print_module_summary(self.G, (torch.zeros(self.config.batch_size, self.config.latent_dim), ))
@@ -82,11 +77,27 @@ class StyleGAN2Trainer(pl.LightningModule):
         g_opt = self.optimizers()[0]
         g_opt.zero_grad(set_to_none=True)
         fake, w = self.forward(batch)
-        p_fake = self.D(self.augment_pipe(self.render(fake, batch)))
-        gen_loss = torch.nn.functional.softplus(-p_fake).mean()
-        self.manual_backward(gen_loss)
+        # p_fake = self.D(self.augment_pipe(self.render(fake, batch)))
+        # gen_loss = torch.nn.functional.softplus(-p_fake).mean()
+        p_discriminator = self.D(self.augment_pipe(self.render(fake, batch)))   # [B, 4], [C_t, A_t, C_f, A_f]
+        
+        p_fake = torch.sum(p_discriminator[:, 2:], dim = 1)                     # take only the false probabilities
+        tf_loss = torch.nn.functional.softplus(-p_fake).mean()
+
+        p_class = p_discriminator[:, :2] + p_discriminator[:, 2:]               # [B, 2], [C, A]
+        gt_label = torch.Tensor([[0, 0] if c == "chair" else [1, 1] for c in batch["category"]]).type(torch.LongTensor).reshape(-1).to(self.device) # NEW
+        cls_loss = torch.nn.functional.cross_entropy(p_class, gt_label).mean()
+        
+        gen_loss = tf_loss + cls_loss
+        self.manual_backward(gen_loss, retain_graph=True)
+        # self.manual_backward(cls_loss, retain_graph=True)
+        # gen_loss.backward(retain_graph=True)
+        log_tf_loss = tf_loss.item()
+        log_cls_loss = cls_loss.item()
         log_gen_loss = gen_loss.item()
         step(g_opt, self.G)
+        self.log("G_tf", log_tf_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
+        self.log("G_cls", log_cls_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
         self.log("G", log_gen_loss, on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
 
     def g_regularizer(self, batch):
@@ -99,31 +110,60 @@ class StyleGAN2Trainer(pl.LightningModule):
         if not torch.isnan(plp):
             gen_loss = self.config.lambda_plp * plp * self.config.lazy_path_penalty_interval
             self.log("rPLP", plp, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
-            self.manual_backward(gen_loss)
+            self.manual_backward(gen_loss, retain_graph=True)
             step(g_opt, self.G)
 
     def d_step(self, batch):
         d_opt = self.optimizers()[1]
         d_opt.zero_grad(set_to_none=True)
 
+        gt_label = torch.Tensor([[0, 0] if c == "chair" else [1, 1] for c in batch["category"]]).type(torch.LongTensor).reshape(-1).to(self.device) # NEW
         fake, _ = self.forward(batch)
-        p_fake = self.D(self.augment_pipe(self.render(fake.detach(), batch)))
-        fake_loss = torch.nn.functional.softplus(p_fake).mean()
+        # p_fake = self.D(self.augment_pipe(self.render(fake.detach(), batch)))
+        # fake_loss = torch.nn.functional.softplus(p_fake).mean()
+        
+        p_fake_discriminator = self.D(self.augment_pipe(self.render(fake, batch)))   # [B, 4], [C_t, A_t, C_f, A_f]
+        
+        p_fake = torch.sum(p_fake_discriminator[:, 2:], dim = 1)                     # take only the false probabilities
+        fake_tf_loss = torch.nn.functional.softplus(p_fake).mean()
+        self.manual_backward(fake_tf_loss)
+        '''
+        p_fake_class = p_fake_discriminator[:, :2] + p_fake_discriminator[:, 2:]     # [B, 2], [C, A]
+        fake_cls_loss = torch.nn.functional.cross_entropy(p_fake_class, gt_label).mean()
+
+        fake_loss = fake_tf_loss + fake_cls_loss
         self.manual_backward(fake_loss)
+        '''
+        # self.manual_backward(fake_loss, retain_graph=True)
+        # fake_loss.backward(retain_graph=True)
+        # self.backward(fake_loss, self.optimizers(), 1, retain_graph=True)
 
-        p_real = self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch)))
+        # p_real = self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch)))
+        # self.augment_pipe.accumulate_real_sign(p_real.sign().detach())
+
+        # # Get discriminator loss
+        # real_loss = torch.nn.functional.softplus(-p_real).mean()
+        '''
+        p_real_discriminator = self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch)))
+
+        p_real = torch.sum(p_real_discriminator[:, :2], dim = 1)                     # take only the false probabilities
         self.augment_pipe.accumulate_real_sign(p_real.sign().detach())
-
-        # Get discriminator loss
-        real_loss = torch.nn.functional.softplus(-p_real).mean()
+        real_tf_loss = torch.nn.functional.softplus(-p_real).mean()
+        p_real_class = p_real_discriminator[:, :2] + p_real_discriminator[:, 2:]     # [B, 2], [C, A]
+        real_cls_loss = torch.nn.functional.cross_entropy(p_real_class, gt_label).mean()
+        
+        real_loss = real_tf_loss + real_cls_loss
         self.manual_backward(real_loss)
-
+        
+        # real_loss.backward(retain_graph=True)
+        # self.backward(real_loss, self.optimizers(), 1, retain_graph=True)
+        '''
         step(d_opt, self.D)
 
-        self.log("D_real", real_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
+        # self.log("D_real", real_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
         self.log("D_fake", fake_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
-        disc_loss = real_loss + fake_loss
-        self.log("D", disc_loss, on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
+        # disc_loss = real_loss + fake_loss
+        # self.log("D", disc_loss, on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
 
     def d_regularizer(self, batch):
         d_opt = self.optimizers()[1]
@@ -238,22 +278,14 @@ class StyleGAN2Trainer(pl.LightningModule):
         shutil.rmtree(odir_real.parent)
 
     def get_mapped_latent(self, z, style_mixing_prob):
-        # shape: [B, 14, 512]
         if torch.rand(()).item() < style_mixing_prob:
             cross_over_point = int(torch.rand(()).item() * self.G.mapping.num_ws)
             w1 = self.G.mapping(z[0])[:, :cross_over_point, :]
             w2 = self.G.mapping(z[1], skip_w_avg_update=True)[:, cross_over_point:, :]
-            # print(torch.cat((w1, w2), dim=1).shape)
             return torch.cat((w1, w2), dim=1)
         else:
             w = self.G.mapping(z[0])
-            # print(w.shape)
             return w
-        # ### NEW ###
-        # feature, _ = self.F(batch['x'], batch['graph_data']['ff2_maps'][0], batch['graph_data'])
-        # # for c, f in zip(code, feature):
-        # #     print(c.shape, f.shape, torch.cat([c, f], dim=1).shape)
-        # batch['shape'] = [torch.cat([c, f], dim=1) for c, f in zip(code, feature)]
 
     def latent(self, limit_batch_size=False):
         batch_size = self.config.batch_size if not limit_batch_size else self.config.batch_size // self.path_length_penalty.pl_batch_shrink
@@ -263,10 +295,7 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     def set_shape_codes(self, batch):
         code = self.E(batch['x'], batch['graph_data']['ff2_maps'][0], batch['graph_data'])
-        # batch['shape'] = code
-        ### NEW ###
-        feature, _ = self.F(batch['x'], batch['graph_data']['ff2_maps'][0], batch['graph_data'])
-        batch['shape'] = [c+f for c, f in zip(code, feature)]
+        batch['shape'] = code
 
     def train_dataloader(self):
         return GraphDataLoader(self.train_set, self.config.batch_size, shuffle=True, pin_memory=True, drop_last=True, num_workers=self.config.num_workers)
@@ -346,7 +375,7 @@ def step(opt, module):
 
 @hydra.main(config_path='../config', config_name='stylegan2_combined')
 def main(config):
-    trainer = create_trainer("StyleGAN23D-Combined-Feature-sum", config)
+    trainer = create_trainer("StyleGAN23D-Combined-Discriminator", config)
     model = StyleGAN2Trainer(config)
     trainer.fit(model)
 

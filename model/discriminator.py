@@ -33,6 +33,35 @@ class Discriminator(torch.nn.Module):
         return x
 
 
+class DiscriminatorMultiClass(torch.nn.Module):
+
+    def __init__(self, img_resolution, img_channels, w_num_layers=0, c_dim=0, mbstd_on=1, channel_base=16384, channel_max=512):
+        super().__init__()
+        self.img_resolution = img_resolution
+        self.img_resolution_log2 = int(np.log2(img_resolution))
+        self.img_channels = img_channels
+        self.c_dim = c_dim
+        self.block_resolutions = [2 ** i for i in range(self.img_resolution_log2, 2, -1)]
+        channels_dict = {res: min(channel_base // res, channel_max) for res in self.block_resolutions + [4]}
+        self.module_list = [EqualizedConv2d(img_channels, channels_dict[img_resolution], kernel_size=1, activation='lrelu')]
+        for res in self.block_resolutions:
+            in_channels = channels_dict[res]
+            out_channels = channels_dict[res // 2]
+            self.module_list.append(DiscriminatorBlock(in_channels, out_channels))
+        self.module_list.append(DiscriminatorEpilogueMultiClass(channels_dict[4], resolution=4, cmap_dim=(0 if c_dim == 0 else channels_dict[4]), mbstd_num_channels=mbstd_on))
+        self.module_list = torch.nn.ModuleList(self.module_list)
+        if c_dim > 0:
+            self.mapping = DiscriminatorMappingNetwork(c_dim=c_dim, cmap_dim=channels_dict[4], num_layers=w_num_layers)
+
+    def forward(self, x, c=None):
+        if self.c_dim > 0:
+            c = self.mapping(c)
+        for net in self.module_list[:-1]:
+            x = net(x)
+        x = self.module_list[-1](x, c)
+        return x
+
+
 class DiscriminatorProgressive(torch.nn.Module):
 
     def __init__(self, img_resolution, img_channels, w_num_layers=0, c_dim=0, mbstd_on=1, channel_base=16384, channel_max=512):
@@ -101,6 +130,30 @@ class DiscriminatorEpilogue(torch.nn.Module):
         self.conv = EqualizedConv2d(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation)
         self.fc = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
         self.out = FullyConnectedLayer(in_channels, cmap_dim if cmap_dim > 0 else 1)
+
+    def forward(self, x, cmap=None):
+        if self.mbstd is not None:
+            x = self.mbstd(x)
+        x = self.conv(x)
+        x = self.fc(x.flatten(1))
+        x = self.out(x)
+        if self.cmap_dim > 0:
+            x = (x * cmap).sum(dim=1, keepdim=True) * (1 / np.sqrt(self.cmap_dim))
+        return x
+
+
+class DiscriminatorEpilogueMultiClass(torch.nn.Module):
+
+    def __init__(self, in_channels, resolution, cmap_dim=0, mbstd_group_size=4, mbstd_num_channels=1, activation='lrelu', n_class=2):
+        super().__init__()
+        self.in_channels = in_channels
+        self.resolution = resolution
+        self.cmap_dim = cmap_dim
+
+        self.mbstd = MinibatchStdLayer(group_size=mbstd_group_size, num_channels=mbstd_num_channels) if mbstd_num_channels > 0 else None
+        self.conv = EqualizedConv2d(in_channels + mbstd_num_channels, in_channels, kernel_size=3, activation=activation)
+        self.fc = FullyConnectedLayer(in_channels * (resolution ** 2), in_channels, activation=activation)
+        self.out = FullyConnectedLayer(in_channels, cmap_dim if cmap_dim > 0 else n_class*2)
 
     def forward(self, x, cmap=None):
         if self.mbstd is not None:

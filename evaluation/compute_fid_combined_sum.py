@@ -38,7 +38,7 @@ def validation_epoch_end(config):
     odir_real = Path("./output/chair_real")
     # odir_real = Path("./output/cars_real")
     # odir_real = Path("./output/combined")
-    odir_fake = Path("./output/12110622_chairs")
+    odir_fake = Path("./output/12110622_2_1_chair")
     
     odir_real.mkdir(exist_ok=True, parents=True)
 

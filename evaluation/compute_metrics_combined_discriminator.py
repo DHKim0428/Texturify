@@ -33,8 +33,8 @@ OUTPUT_DIR = Path("./output")
 REAL_DIR = Path("/cluster_HDD/gondor/ysiddiqui/surface_gan_eval/photoshape/real")
 EXP_NAME = "fast_dev"
 
-CHECKPOINT = "./checkpoints/F_latent/best.ckpt"
-CHECKPOINT_EMA = "./checkpoints/F_latent/ema_best.pth"
+CHECKPOINT = "./checkpoints/D_gen/best.ckpt"
+CHECKPOINT_EMA = "./checkpoints/D_gen/ema_best.pth"
 
 def render_faces(R, face_colors, batch, render_size, image_size):
     rendered_color = R.render(batch['vertices'], batch['indices'], to_vertex_colors_scatter(face_colors, batch), batch["ranges"].cpu(), resolution=render_size)
@@ -48,7 +48,7 @@ def render_faces(R, face_colors, batch, render_size, image_size):
 @hydra.main(config_path='../config', config_name='stylegan2_combined', version_base=None)
 def evaluate_our_gan(config):
     from model.graph_generator_u_deep import Generator
-    from model.graph import TwinGraphEncoder, TwinGraphFeatureLatent
+    from model.graph import TwinGraphEncoder, TwinGraphFeature
     from dataset.mesh_real_features_combined import FaceGraphMeshDataset
     from torch_ema import ExponentialMovingAverage
     config.batch_size = 2
@@ -69,7 +69,6 @@ def evaluate_our_gan(config):
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
 
     E = TwinGraphEncoder(eval_dataset.num_feats, 1).to(device)
-    F = TwinGraphFeatureLatent(eval_dataset.num_feats, 1, batch_size=config.batch_size).to(device)
     G = Generator(config.latent_dim, config.latent_dim, config.num_mapping_layers, config.num_faces, 3, e_layer_dims=E.layer_dims, channel_base=config.g_channel_base, channel_max=config.g_channel_max).to(device)
     R = DifferentiableRenderer(config.render_size, "bounds", config.colorspace)
     state_dict = torch.load(CHECKPOINT, map_location=device)["state_dict"]
@@ -78,20 +77,15 @@ def evaluate_our_gan(config):
     ema.load_state_dict(torch.load(CHECKPOINT_EMA, map_location=device))
     ema.copy_to([p for p in G.parameters() if p.requires_grad])
     E.load_state_dict(get_parameters_from_state_dict(state_dict, "E"))
-    f_dict = torch.load("./checkpoints/class feature network/F_latent.ckpt", map_location=device)["state_dict"]
-    F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))    
     G.eval()
     E.eval()
-    F.eval()
-
+    
     with torch.no_grad():
         for iter_idx, batch in enumerate(tqdm(eval_loader)):
             eval_batch = to_device(batch, device)
             shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
             for z_idx in range(num_latent):
-                z = torch.randn(config.batch_size, config.latent_dim // 2).to(device)
-                z = torch.cat((z, feature), dim=1)
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
                 fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
                 fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
                 for batch_idx in range(fake_render.shape[0]):
@@ -101,7 +95,7 @@ def evaluate_our_gan(config):
     odir_fake = OUTPUT_DIR_OURS
     fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
-    file_name = './combined_latent_{}.txt'.format(EXP_NAME)
+    file_name = './combined_discriminator_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
         file.write(f'FID: {fid_score:.4f}, KID: {kid_score:.4f}\n')
 
@@ -112,10 +106,10 @@ def evaluate_our_gan(config):
 @hydra.main(config_path='../config', config_name='stylegan2_car', version_base=None)
 def evaluate_our_gan_car(config):
     from model.graph_generator_u_deep import Generator
-    from model.graph import TwinGraphEncoder, TwinGraphFeatureLatent
+    from model.graph import TwinGraphEncoder
     from dataset.meshcar_real_features_ff2 import FaceGraphMeshDataset
     from torch_ema import ExponentialMovingAverage
-    # config.batch_size = 1
+    config.batch_size = 2
     config.views_per_sample = 2
     config.image_size = 256
     config.render_size = 512
@@ -131,7 +125,6 @@ def evaluate_our_gan_car(config):
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
 
     E = TwinGraphEncoder(eval_dataset.num_feats, 1).to(device)
-    F = TwinGraphFeatureLatent(eval_dataset.num_feats, 1, batch_size=config.batch_size).to(device)
     G = Generator(config.latent_dim, config.latent_dim, config.num_mapping_layers, config.num_faces, 3, e_layer_dims=E.layer_dims, channel_base=config.g_channel_base, channel_max=config.g_channel_max).to(device)
     R = DifferentiableRenderer(config.render_size, "bounds", config.colorspace)
     state_dict = torch.load(CHECKPOINT, map_location=device)["state_dict"]
@@ -140,20 +133,15 @@ def evaluate_our_gan_car(config):
     ema.load_state_dict(torch.load(CHECKPOINT_EMA, map_location=device))
     ema.copy_to([p for p in G.parameters() if p.requires_grad])
     E.load_state_dict(get_parameters_from_state_dict(state_dict, "E"))
-    f_dict = torch.load("./checkpoints/class feature network/F_latent.ckpt", map_location=device)["state_dict"]
-    F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))    
     G.eval()
     E.eval()
-    F.eval()
-
+    
     with torch.no_grad():
         for iter_idx, batch in enumerate(tqdm(eval_loader)):
             eval_batch = to_device(batch, device)
             shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
             for z_idx in range(num_latent):
-                z = torch.randn(config.batch_size, config.latent_dim // 2).to(device)
-                z = torch.cat((z, feature), dim=1)
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
                 fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
                 fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
                 for batch_idx in range(fake_render.shape[0]):
@@ -163,7 +151,7 @@ def evaluate_our_gan_car(config):
     odir_fake = OUTPUT_DIR_OURS
     fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
-    file_name = './combined_latent_car_{}.txt'.format(EXP_NAME)
+    file_name = './combined_discriminator_car_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
         file.write(f'FID: {fid_score:.4f}, KID: {kid_score:.4f}\n')
 
@@ -174,7 +162,7 @@ def evaluate_our_gan_car(config):
 @hydra.main(config_path='../config', config_name='stylegan2', version_base=None)
 def evaluate_our_gan_chair(config):
     from model.graph_generator_u_deep import Generator
-    from model.graph import TwinGraphEncoder, TwinGraphFeatureLatent
+    from model.graph import TwinGraphEncoder
     from dataset.mesh_real_features import FaceGraphMeshDataset   
     from torch_ema import ExponentialMovingAverage
     config.batch_size = 2
@@ -194,7 +182,6 @@ def evaluate_our_gan_chair(config):
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
 
     E = TwinGraphEncoder(eval_dataset.num_feats, 1).to(device)
-    F = TwinGraphFeatureLatent(eval_dataset.num_feats, 1, batch_size=config.batch_size).to(device)
     G = Generator(config.latent_dim, config.latent_dim, config.num_mapping_layers, config.num_faces, 3, e_layer_dims=E.layer_dims, channel_base=config.g_channel_base, channel_max=config.g_channel_max).to(device)
     R = DifferentiableRenderer(config.render_size, "bounds", config.colorspace)
     state_dict = torch.load(CHECKPOINT, map_location=device)["state_dict"]
@@ -203,20 +190,15 @@ def evaluate_our_gan_chair(config):
     ema.load_state_dict(torch.load(CHECKPOINT_EMA, map_location=device))
     ema.copy_to([p for p in G.parameters() if p.requires_grad])
     E.load_state_dict(get_parameters_from_state_dict(state_dict, "E"))
-    f_dict = torch.load("./checkpoints/class feature network/F_latent.ckpt", map_location=device)["state_dict"]
-    F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))    
     G.eval()
     E.eval()
-    F.eval()
 
     with torch.no_grad():
         for iter_idx, batch in enumerate(tqdm(eval_loader)):
             eval_batch = to_device(batch, device)
             shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
             for z_idx in range(num_latent):
-                z = torch.randn(config.batch_size, config.latent_dim // 2).to(device)
-                z = torch.cat((z, feature), dim=1)
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
                 fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
                 fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
                 for batch_idx in range(fake_render.shape[0]):
@@ -226,7 +208,7 @@ def evaluate_our_gan_chair(config):
     odir_fake = OUTPUT_DIR_OURS
     fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
-    file_name = './combined_latent_chair_{}.txt'.format(EXP_NAME)
+    file_name = './combined_discriminator_chair_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
         file.write(f'FID: {fid_score:.4f}, KID: {kid_score:.4f}\n')
 

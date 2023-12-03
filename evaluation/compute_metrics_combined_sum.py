@@ -32,9 +32,9 @@ torch.backends.cudnn.deterministic = False
 OUTPUT_DIR = Path("./output")
 REAL_DIR = Path("/cluster_HDD/gondor/ysiddiqui/surface_gan_eval/photoshape/real")
 EXP_NAME = "fast_dev"
-EPOCH = 100
-EMA = 100000
 
+CHECKPOINT = "./checkpoints/F_sum/best.ckpt"
+CHECKPOINT_EMA = "./checkpoints/F_sum/ema_best.pth"
 
 def render_faces(R, face_colors, batch, render_size, image_size):
     rendered_color = R.render(batch['vertices'], batch['indices'], to_vertex_colors_scatter(face_colors, batch), batch["ranges"].cpu(), resolution=render_size)
@@ -62,15 +62,8 @@ def evaluate_our_gan(config):
     # config.dataset_path = "../data/CADTextures/Photoshape/shapenet-chairs-manifold-highres-part_processed_color"
     num_latent = 1
 
-    # OUTPUT_DIR_OURS = OUTPUT_DIR / f"ours_256-2_{config.views_per_sample}_{num_latent}"
-    OUTPUT_DIR_OURS = OUTPUT_DIR / f"{EXP_NAME[:8]}_{config.views_per_sample}_{num_latent}"
+    OUTPUT_DIR_OURS = OUTPUT_DIR / f"{EXP_NAME}_{config.views_per_sample}_{num_latent}"
     OUTPUT_DIR_OURS.mkdir(exist_ok=True, parents=True)
-    # CHECKPOINT = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/15021601_StyleGAN23D_fg3bgg-big-lrd1g14-v2m5-1K512/checkpoints/_epoch=119.ckpt"
-    # CHECKPOINT_EMA = "/cluster_HDD/gondor/ysiddiqui/stylegan2-ada-3d-texture/runs/15021601_StyleGAN23D_fg3bgg-big-lrd1g14-v2m5-1K512/checkpoints/ema_000076439.pth"
-    # CHECKPOINT = "../checkpoints/original/chair/_epoch=149.ckpt"
-    # CHECKPOINT_EMA = "../checkpoints/original/chair/ema_000065549.pth"
-    CHECKPOINT = "./output/{0}/checkpoints/_epoch={1}.ckpt".format(EXP_NAME, EPOCH)
-    CHECKPOINT_EMA = "./output/{0}/checkpoints/ema_{1}.pth".format(EXP_NAME, EMA)
     device = torch.device("cuda")
     eval_dataset = FaceGraphMeshDataset(config)
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
@@ -81,13 +74,11 @@ def evaluate_our_gan(config):
     R = DifferentiableRenderer(config.render_size, "bounds", config.colorspace)
     state_dict = torch.load(CHECKPOINT, map_location=device)["state_dict"]
     G.load_state_dict(get_parameters_from_state_dict(state_dict, "G"))
-    # ema = torch.load(CHECKPOINT_EMA, map_location=device)
     ema = ExponentialMovingAverage(G.parameters(), 0.995)
-    # print(torch.load(CHECKPOINT_EMA, map_location=device)["decay"])
     ema.load_state_dict(torch.load(CHECKPOINT_EMA, map_location=device))
     ema.copy_to([p for p in G.parameters() if p.requires_grad])
     E.load_state_dict(get_parameters_from_state_dict(state_dict, "E"))
-    f_dict = torch.load("./runs/08111238_StyleGAN23D-Feature_fast_dev/checkpoints/_epoch=14.ckpt", map_location=device)["state_dict"]
+    f_dict = torch.load("./checkpoints/class feature network/F_sum.ckpt", map_location=device)["state_dict"]
     F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))    
     G.eval()
     E.eval()
@@ -97,11 +88,8 @@ def evaluate_our_gan(config):
         for iter_idx, batch in enumerate(tqdm(eval_loader)):
             eval_batch = to_device(batch, device)
             shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            ### NEW ###
             feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            # shape = [c+f for c, f in zip(shape, feature)]
             shape[-1] += feature[-1]
-            ###########
             for z_idx in range(num_latent):
                 z = torch.randn(config.batch_size, config.latent_dim).to(device)
                 fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
@@ -115,7 +103,7 @@ def evaluate_our_gan(config):
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     file_name = './combined_sum_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
-        file.write(f'[Epoch: {EPOCH}] FID: {fid_score:.4f}, KID: {kid_score:.4f}')
+        file.write(f'FID: {fid_score:.4f}, KID: {kid_score:.4f}')
 
     return 
 
@@ -136,11 +124,8 @@ def evaluate_our_gan_car(config):
     config.g_channel_max = 512
     num_latent = 4
 
-    # OUTPUT_DIR_OURS = OUTPUT_DIR / f"ours_256-2_{config.views_per_sample}_{num_latent}"
-    OUTPUT_DIR_OURS = OUTPUT_DIR / f"{EXP_NAME[:8]}_{config.views_per_sample}_{num_latent}_car"
+    OUTPUT_DIR_OURS = OUTPUT_DIR / f"{EXP_NAME}_{config.views_per_sample}_{num_latent}_car"
     OUTPUT_DIR_OURS.mkdir(exist_ok=True, parents=True)
-    CHECKPOINT = "./output/{0}/checkpoints/_epoch={1}.ckpt".format(EXP_NAME, EPOCH)
-    CHECKPOINT_EMA = "./output/{0}/checkpoints/ema_{1}.pth".format(EXP_NAME, EMA)
     device = torch.device("cuda")
     eval_dataset = FaceGraphMeshDataset(config)
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
@@ -151,13 +136,11 @@ def evaluate_our_gan_car(config):
     R = DifferentiableRenderer(config.render_size, "bounds", config.colorspace)
     state_dict = torch.load(CHECKPOINT, map_location=device)["state_dict"]
     G.load_state_dict(get_parameters_from_state_dict(state_dict, "G"))
-    # ema = torch.load(CHECKPOINT_EMA, map_location=device)
     ema = ExponentialMovingAverage(G.parameters(), 0.995)
-    # print(torch.load(CHECKPOINT_EMA, map_location=device)["decay"])
     ema.load_state_dict(torch.load(CHECKPOINT_EMA, map_location=device))
     ema.copy_to([p for p in G.parameters() if p.requires_grad])
     E.load_state_dict(get_parameters_from_state_dict(state_dict, "E"))
-    f_dict = torch.load("./runs/08111238_StyleGAN23D-Feature_fast_dev/checkpoints/_epoch=14.ckpt", map_location=device)["state_dict"]
+    f_dict = torch.load("./checkpoints/class feature network/F_sum.ckpt", map_location=device)["state_dict"]
     F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))    
     G.eval()
     E.eval()
@@ -167,11 +150,8 @@ def evaluate_our_gan_car(config):
         for iter_idx, batch in enumerate(tqdm(eval_loader)):
             eval_batch = to_device(batch, device)
             shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            ### NEW ###
             feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            # shape = [c+f for c, f in zip(shape, feature)]
             shape[-1] += feature[-1]
-            ###########
             for z_idx in range(num_latent):
                 z = torch.randn(config.batch_size, config.latent_dim).to(device)
                 fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
@@ -185,7 +165,7 @@ def evaluate_our_gan_car(config):
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     file_name = './combined_sum_car_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
-        file.write(f'[Epoch: {EPOCH}] FID: {fid_score:.4f}, KID: {kid_score:.4f}\n')
+        file.write(f'FID: {fid_score:.4f}, KID: {kid_score:.4f}\n')
 
     return 
 
@@ -207,11 +187,8 @@ def evaluate_our_gan_chair(config):
     # config.g_channel_max = 768
     num_latent = 1
 
-    # OUTPUT_DIR_OURS = OUTPUT_DIR / f"ours_256-2_{config.views_per_sample}_{num_latent}"
-    OUTPUT_DIR_OURS = OUTPUT_DIR / f"{EXP_NAME[:8]}_{config.views_per_sample}_{num_latent}_chair"
+    OUTPUT_DIR_OURS = OUTPUT_DIR / f"{EXP_NAME}_{config.views_per_sample}_{num_latent}_chair"
     OUTPUT_DIR_OURS.mkdir(exist_ok=True, parents=True)
-    CHECKPOINT = "./output/{0}/checkpoints/_epoch={1}.ckpt".format(EXP_NAME, EPOCH)
-    CHECKPOINT_EMA = "./output/{0}/checkpoints/ema_{1}.pth".format(EXP_NAME, EMA)
     device = torch.device("cuda")
     eval_dataset = FaceGraphMeshDataset(config)
     eval_loader = GraphDataLoader(eval_dataset, config.batch_size, drop_last=True, num_workers=config.num_workers)
@@ -222,13 +199,11 @@ def evaluate_our_gan_chair(config):
     R = DifferentiableRenderer(config.render_size, "bounds", config.colorspace)
     state_dict = torch.load(CHECKPOINT, map_location=device)["state_dict"]
     G.load_state_dict(get_parameters_from_state_dict(state_dict, "G"))
-    # ema = torch.load(CHECKPOINT_EMA, map_location=device)
     ema = ExponentialMovingAverage(G.parameters(), 0.995)
-    # print(torch.load(CHECKPOINT_EMA, map_location=device)["decay"])
     ema.load_state_dict(torch.load(CHECKPOINT_EMA, map_location=device))
     ema.copy_to([p for p in G.parameters() if p.requires_grad])
     E.load_state_dict(get_parameters_from_state_dict(state_dict, "E"))
-    f_dict = torch.load("./runs/08111238_StyleGAN23D-Feature_fast_dev/checkpoints/_epoch=14.ckpt", map_location=device)["state_dict"]
+    f_dict = torch.load("./checkpoints/class feature network/F_sum.ckpt", map_location=device)["state_dict"]
     F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))    
     G.eval()
     E.eval()
@@ -238,11 +213,8 @@ def evaluate_our_gan_chair(config):
         for iter_idx, batch in enumerate(tqdm(eval_loader)):
             eval_batch = to_device(batch, device)
             shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            ### NEW ###
             feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-            # shape = [c+f for c, f in zip(shape, feature)]
             shape[-1] += feature[-1]
-            ###########
             for z_idx in range(num_latent):
                 z = torch.randn(config.batch_size, config.latent_dim).to(device)
                 fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
@@ -256,38 +228,15 @@ def evaluate_our_gan_chair(config):
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     file_name = './combined_sum_chair_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
-        file.write(f'[Epoch: {EPOCH}] FID: {fid_score:.4f}, KID: {kid_score:.4f}')
+        file.write(f'FID: {fid_score:.4f}, KID: {kid_score:.4f}')
 
     return 
 
 
 def main():
-    global EXP_NAME, EPOCH, EMA
-    # EXP_NAME = "20111013_StyleGAN23D-Combined-Feature-sum_fast_dev"
-    EXP_NAME = "26110948_StyleGAN23D-Combined-Feature-sum_fast_dev"
-    # epochs = [i for i in range(4, 60, 5)]
-    epochs = [59, 44, 49, 64, 54, 39, 75]
-    # epochs.reverse()
-    emas = {4:"000009074", 9:"000018149", 
-            14:"000027223", 19:"000036297", 
-            24:"000045371", 29:"000054445", 
-            34:"000063520", 39:"000072594",
-            44:"000081669", 49:"000090743", 
-            54:"000099817", 59:"000108891", 
-            64:"000117965", 69:"000127040", 
-            74:"000136114", 79:"000145189",
-            84:"000154263", 89:"000163337", 
-            94:"000172411", 99:"000181485", 
-            104:"000190560", 109:"000199634",
-            114:"000208709", 119:"000217783",
-            124:"000226857", 129:"000235931",
-            134:"000245005", 139:"000254080",}
-
-    for epoch in epochs:
-        EPOCH, EMA = epoch, emas[epoch]
-        # evaluate_our_gan()
-        evaluate_our_gan_car()
-        # result3 = evaluate_our_gan_chair()
+    evaluate_our_gan()
+    evaluate_our_gan_car()
+    evaluate_our_gan_chair()
         
 
 

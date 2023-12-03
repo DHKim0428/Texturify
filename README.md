@@ -1,4 +1,4 @@
-# Texturify Generating Textures on 3D Shape Surfaces
+# Texturify: Generating Textures on 3D Shape Surfaces
 
 ## About
 

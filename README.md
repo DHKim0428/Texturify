@@ -179,6 +179,26 @@ Official stylegan2-ada code and paper.
 }
 ```
 
+Original Texturify.
+
+```
+@inproceedings{siddiqui2022texturify,
+  author    = {Yawar Siddiqui and Justus Thies and Fangchang Ma and Qi Shan and Matthias Nie{\ss}ner and Angela Dai},
+  editor    = {Shai Avidan and Gabriel J. Brostow and Moustapha Ciss{\'{e}} and Giovanni Maria Farinella and Tal Hassner},
+  title     = {Texturify: Generating Textures on 3D Shape Surfaces},
+  booktitle = {Computer Vision - {ECCV} 2022 - 17th European Conference, Tel Aviv, Israel, October 23-27, 2022, Proceedings, Part {III}},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {13663},
+  pages     = {72--88},
+  publisher = {Springer},
+  year      = {2022},
+  url       = {https://doi.org/10.1007/978-3-031-20062-5\_5},
+  doi       = {10.1007/978-3-031-20062-5\_5},
+  timestamp = {Tue, 15 Nov 2022 15:21:36 +0100},
+  biburl    = {https://dblp.org/rec/conf/eccv/SiddiquiTMSND22.bib},
+  bibsource = {dblp computer science bibliography, https://dblp.org}
+}
+```
 
 License
 =====================

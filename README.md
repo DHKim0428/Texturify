@@ -119,6 +119,7 @@ Texturify
 ```
 
 Use the following command under the root folder to evaluate our checkpoints.
+All the results in this project were generated using 2 NVIDIA RTX 3090 GPUs.
 
 ```
 python evaluation/compute_metrics_combined_sum.py

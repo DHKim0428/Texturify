@@ -126,7 +126,8 @@ python evaluation/compute_metrics_combined_sum.py
 
 ## Configuration
 
-Configuration can be overriden with command line flags.
+<details>
+<summary>Configuration can be overriden with command line flags.</summary>
 
 | Key | Description | Default |
 | ----|-------------|---------|
@@ -160,6 +161,8 @@ Configuration can be overriden with command line flags.
 |`max_epoch`| Maximum training epochs |250|
 |`val_check_interval`| Epoch interval for evaluating metrics and saving generated samples |1|
 |`resume`| Resume checkpoint |`null`|
+
+</details>
 
 
 References

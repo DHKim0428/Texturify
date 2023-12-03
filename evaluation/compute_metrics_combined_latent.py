@@ -45,7 +45,7 @@ def render_faces(R, face_colors, batch, render_size, image_size):
 
 
 # Ours
-@hydra.main(config_path='../config', config_name='stylegan2_combined', version_base=None)
+@hydra.main(config_path='../config', config_name='stylegan2_combined_latent', version_base=None)
 def evaluate_our_gan(config):
     from model.graph_generator_u_deep import Generator
     from model.graph import TwinGraphEncoder, TwinGraphFeatureLatent

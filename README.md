@@ -96,7 +96,33 @@ Available [here](https://www.dropbox.com/scl/fi/cz9arygdbz05gucapldd1/texturify_
 
 ## Our Checkpoints
 
-Available [here](https://naver.com/)
+Available [here](https://naver.com/).
+
+To test our checkpoints, create a folder named `checkpoints` under the project root directory.
+Unzip the aforementioned checkpoints file into the `checkpoints` folder. 
+Ensure that the folder structure matches the following diagram.
+
+```
+Texturify
+│ 
+├── checkpoints
+│   ├── baseline
+│   ├── class feature network
+│   ├── D_gen
+│   ├── F_latent
+│   └── F_sum
+└── evaluation
+    ├── compute_metrics_combined_discriminator.py
+    ├── compute_metrics_combined_latent.py
+    ├── compute_metrics_combined_sum.py
+    └── compute_metrics_combined_vanila.py
+```
+
+Use the following command under the root folder to evaluate our checkpoints.
+
+```
+python evaluation/compute_metrics_combined_sum.py
+```
 
 ## Configuration
 

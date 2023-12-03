@@ -77,21 +77,21 @@ class StyleGAN2Trainer(pl.LightningModule):
         g_opt = self.optimizers()[0]
         g_opt.zero_grad(set_to_none=True)
         fake, w = self.forward(batch)
-        # p_fake = self.D(self.augment_pipe(self.render(fake, batch)))
-        # gen_loss = torch.nn.functional.softplus(-p_fake).mean()
-        p_discriminator = self.D(self.augment_pipe(self.render(fake, batch)))   # [B, 4], [C_t, A_t, C_f, A_f]
+        softmax = torch.nn.Softmax(dim=1)
+        bceloss = torch.nn.BCELoss()
+        p_discriminator = softmax(self.D(self.augment_pipe(self.render(fake, batch))))   # [B, 4], [C_t, A_t, C_f, A_f]
         
-        p_fake = torch.sum(p_discriminator[:, 2:], dim = 1)                     # take only the false probabilities
-        tf_loss = torch.nn.functional.softplus(-p_fake).mean()
-
-        p_class = p_discriminator[:, :2] + p_discriminator[:, 2:]               # [B, 2], [C, A]
+        p_fake = torch.clamp(torch.sum(p_discriminator[:, 2:], dim = 1), min=0.0, max=1.0)       # take only the false probabilities
+        # tf_loss = torch.nn.functional.softplus(-p_fake).mean()
+        zeros = torch.zeros(len(p_fake)).to(self.device)
+        tf_loss = bceloss(p_fake, zeros)
+        
+        p_class = torch.clamp(p_discriminator[:, :2] + p_discriminator[:, 2:], min=0.0, max=1.0)   # [B, 2], [C, A]
         gt_label = torch.Tensor([[0, 0] if c == "chair" else [1, 1] for c in batch["category"]]).type(torch.LongTensor).reshape(-1).to(self.device) # NEW
         cls_loss = torch.nn.functional.cross_entropy(p_class, gt_label).mean()
         
         gen_loss = tf_loss + cls_loss
-        self.manual_backward(gen_loss, retain_graph=True)
-        # self.manual_backward(cls_loss, retain_graph=True)
-        # gen_loss.backward(retain_graph=True)
+        self.manual_backward(gen_loss)
         log_tf_loss = tf_loss.item()
         log_cls_loss = cls_loss.item()
         log_gen_loss = gen_loss.item()
@@ -110,7 +110,7 @@ class StyleGAN2Trainer(pl.LightningModule):
         if not torch.isnan(plp):
             gen_loss = self.config.lambda_plp * plp * self.config.lazy_path_penalty_interval
             self.log("rPLP", plp, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
-            self.manual_backward(gen_loss, retain_graph=True)
+            self.manual_backward(gen_loss)
             step(g_opt, self.G)
 
     def d_step(self, batch):
@@ -119,51 +119,47 @@ class StyleGAN2Trainer(pl.LightningModule):
 
         gt_label = torch.Tensor([[0, 0] if c == "chair" else [1, 1] for c in batch["category"]]).type(torch.LongTensor).reshape(-1).to(self.device) # NEW
         fake, _ = self.forward(batch)
-        # p_fake = self.D(self.augment_pipe(self.render(fake.detach(), batch)))
-        # fake_loss = torch.nn.functional.softplus(p_fake).mean()
-        
-        p_fake_discriminator = self.D(self.augment_pipe(self.render(fake, batch)))   # [B, 4], [C_t, A_t, C_f, A_f]
-        
-        p_fake = torch.sum(p_fake_discriminator[:, 2:], dim = 1)                     # take only the false probabilities
-        fake_tf_loss = torch.nn.functional.softplus(p_fake).mean()
-        self.manual_backward(fake_tf_loss)
-        '''
-        p_fake_class = p_fake_discriminator[:, :2] + p_fake_discriminator[:, 2:]     # [B, 2], [C, A]
-        fake_cls_loss = torch.nn.functional.cross_entropy(p_fake_class, gt_label).mean()
+        softmax = torch.nn.Softmax(dim=1)
+        bceloss = torch.nn.BCELoss()
+        p_fake_discriminator = softmax(self.D(self.augment_pipe(self.render(fake.detach(), batch))))   # [B, 4], [C_t, A_t, C_f, A_f]
+        # with open('./discriminator_log_{}.txt'.format(self.device), 'a+') as file:
+            # file.write(f'[p_fake_discriminator]\n{p_fake_discriminator}\n')
 
+        p_fake = torch.clamp(torch.sum(p_fake_discriminator[:, 2:], dim = 1), min=0.0, max=1.0)                     # take only the false probabilities
+        # fake_tf_loss = torch.nn.functional.softplus(p_fake).mean()
+        # with open('./discriminator_log_{}.txt'.format(self.device), 'a+') as file:
+            # file.write(f'[p_fake]\n{p_fake}\n')
+        ones = torch.ones(len(p_fake)).to(self.device)
+        fake_tf_loss = bceloss(p_fake, ones)
+
+        p_fake_class = torch.clamp(p_fake_discriminator[:, :2] + p_fake_discriminator[:, 2:], min=0.0, max=1.0)     # [B, 2], [C, A]
+        fake_cls_loss = torch.nn.functional.cross_entropy(p_fake_class, gt_label).mean()
         fake_loss = fake_tf_loss + fake_cls_loss
         self.manual_backward(fake_loss)
-        '''
-        # self.manual_backward(fake_loss, retain_graph=True)
-        # fake_loss.backward(retain_graph=True)
-        # self.backward(fake_loss, self.optimizers(), 1, retain_graph=True)
 
-        # p_real = self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch)))
-        # self.augment_pipe.accumulate_real_sign(p_real.sign().detach())
-
-        # # Get discriminator loss
-        # real_loss = torch.nn.functional.softplus(-p_real).mean()
-        '''
-        p_real_discriminator = self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch)))
-
-        p_real = torch.sum(p_real_discriminator[:, :2], dim = 1)                     # take only the false probabilities
+        p_real_discriminator = softmax(self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch))))
+        # with open('./discriminator_log_{}.txt'.format(self.device), 'a+') as file:
+            # file.write(f'[p_real_discriminator]\n{p_real_discriminator}\n')
+        p_real = torch.clamp(torch.sum(p_real_discriminator[:, :2], dim = 1), min=0.0, max=1.0)                     # take only the false probabilities
+        # with open('./discriminator_log_{}.txt'.format(self.device), 'a+') as file:
+        #     file.write(f'[p_real]\n{p_real}\n')
         self.augment_pipe.accumulate_real_sign(p_real.sign().detach())
-        real_tf_loss = torch.nn.functional.softplus(-p_real).mean()
-        p_real_class = p_real_discriminator[:, :2] + p_real_discriminator[:, 2:]     # [B, 2], [C, A]
+        
+        # real_tf_loss = torch.nn.functional.softplus(-p_real).mean()
+        real_tf_loss = bceloss(p_real, ones)
+
+        p_real_class = torch.clamp(p_real_discriminator[:, :2] + p_real_discriminator[:, 2:], min=0.0, max=1.0)     # [B, 2], [C, A]
+        
         real_cls_loss = torch.nn.functional.cross_entropy(p_real_class, gt_label).mean()
         
         real_loss = real_tf_loss + real_cls_loss
         self.manual_backward(real_loss)
-        
-        # real_loss.backward(retain_graph=True)
-        # self.backward(real_loss, self.optimizers(), 1, retain_graph=True)
-        '''
         step(d_opt, self.D)
 
-        # self.log("D_real", real_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
+        self.log("D_real", real_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
         self.log("D_fake", fake_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
-        # disc_loss = real_loss + fake_loss
-        # self.log("D", disc_loss, on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
+        disc_loss = real_loss + fake_loss
+        self.log("D", disc_loss, on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
 
     def d_regularizer(self, batch):
         d_opt = self.optimizers()[1]
@@ -215,7 +211,7 @@ class StyleGAN2Trainer(pl.LightningModule):
 
     @rank_zero_only
     def validation_epoch_end(self, _val_step_outputs):
-        return
+        # return
         (Path("runs") / self.config.experiment / "checkpoints").mkdir(exist_ok=True)
         torch.save(self.ema.state_dict(), Path("runs") / self.config.experiment / "checkpoints" / f"ema_{self.global_step:09d}.pth")
         with Timer("export_grid"):
@@ -274,8 +270,8 @@ class StyleGAN2Trainer(pl.LightningModule):
             # print(f'KID: {kid_score:.3f}')
             self.log(f"fid", fid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
             # self.log(f"kid", kid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
-        
         shutil.rmtree(odir_real.parent)
+        torch.cuda.empty_cache()
 
     def get_mapped_latent(self, z, style_mixing_prob):
         if torch.rand(()).item() < style_mixing_prob:

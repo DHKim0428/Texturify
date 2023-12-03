@@ -53,12 +53,15 @@ class DiscriminatorMultiClass(torch.nn.Module):
         if c_dim > 0:
             self.mapping = DiscriminatorMappingNetwork(c_dim=c_dim, cmap_dim=channels_dict[4], num_layers=w_num_layers)
 
+        # self.softmax = torch.nn.Softmax()
+
     def forward(self, x, c=None):
         if self.c_dim > 0:
             c = self.mapping(c)
         for net in self.module_list[:-1]:
             x = net(x)
         x = self.module_list[-1](x, c)
+        # x = self.softmax(x)
         return x
 
 

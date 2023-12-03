@@ -26,7 +26,7 @@ from model.augment import AugmentPipe
 from model.differentiable_renderer import DifferentiableRenderer
 from model.graph import TwinGraphEncoder, TwinGraphFeature
 from model.graph_generator_u_deep_feature import Generator
-from model.discriminator import Discriminator
+from model.discriminator import DiscriminatorMultiClass
 from model.loss import PathLengthPenalty, compute_gradient_penalty
 from trainer import create_trainer
 from util.timer import Timer
@@ -54,7 +54,7 @@ class StyleGAN2Trainer(pl.LightningModule):
         self.F.load_state_dict(get_parameters_from_state_dict(f_dict, "F"))
         self.F.eval()
         self.G = Generator(config.latent_dim, config.latent_dim, config.num_mapping_layers, config.num_faces, 3, e_layer_dims=self.E.layer_dims, channel_base=config.g_channel_base, channel_max=config.g_channel_max)
-        self.D = Discriminator(config.image_size, 3, w_num_layers=config.num_mapping_layers, mbstd_on=config.mbstd_on, channel_base=config.d_channel_base)
+        self.D = DiscriminatorMultiClass(config.image_size, 3, w_num_layers=config.num_mapping_layers, mbstd_on=config.mbstd_on, channel_base=config.d_channel_base)
         self.R = None
         self.augment_pipe = AugmentPipe(config.ada_start_p, config.ada_target, config.ada_interval, config.ada_fixed, config.batch_size, config.views_per_sample, config.colorspace)
         # print_module_summary(self.G, (torch.zeros(self.config.batch_size, self.config.latent_dim), ))
@@ -82,11 +82,27 @@ class StyleGAN2Trainer(pl.LightningModule):
         g_opt = self.optimizers()[0]
         g_opt.zero_grad(set_to_none=True)
         fake, w = self.forward(batch)
-        p_fake = self.D(self.augment_pipe(self.render(fake, batch)))
-        gen_loss = torch.nn.functional.softplus(-p_fake).mean()
+        softmax = torch.nn.Softmax(dim=1)
+        bceloss = torch.nn.BCELoss()
+        p_discriminator = softmax(self.D(self.augment_pipe(self.render(fake, batch))))   # [B, 4], [C_t, A_t, C_f, A_f]
+        
+        p_fake = torch.clamp(torch.sum(p_discriminator[:, 2:], dim = 1), min=0.0, max=1.0)       # take only the false probabilities
+        # tf_loss = torch.nn.functional.softplus(-p_fake).mean()
+        zeros = torch.zeros(len(p_fake)).to(self.device)
+        tf_loss = bceloss(p_fake, zeros)
+        
+        p_class = torch.clamp(p_discriminator[:, :2] + p_discriminator[:, 2:], min=0.0, max=1.0)   # [B, 2], [C, A]
+        gt_label = torch.Tensor([[0, 0] if c == "chair" else [1, 1] for c in batch["category"]]).type(torch.LongTensor).reshape(-1).to(self.device) # NEW
+        cls_loss = torch.nn.functional.cross_entropy(p_class, gt_label).mean()
+        
+        gen_loss = tf_loss + cls_loss
         self.manual_backward(gen_loss)
+        log_tf_loss = tf_loss.item()
+        log_cls_loss = cls_loss.item()
         log_gen_loss = gen_loss.item()
         step(g_opt, self.G)
+        self.log("G_tf", log_tf_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
+        self.log("G_cls", log_cls_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)
         self.log("G", log_gen_loss, on_step=True, on_epoch=False, prog_bar=True, logger=True, sync_dist=True)
 
     def g_regularizer(self, batch):
@@ -106,18 +122,35 @@ class StyleGAN2Trainer(pl.LightningModule):
         d_opt = self.optimizers()[1]
         d_opt.zero_grad(set_to_none=True)
 
+        gt_label = torch.Tensor([[0, 0] if c == "chair" else [1, 1] for c in batch["category"]]).type(torch.LongTensor).reshape(-1).to(self.device) # NEW
         fake, _ = self.forward(batch)
-        p_fake = self.D(self.augment_pipe(self.render(fake.detach(), batch)))
-        fake_loss = torch.nn.functional.softplus(p_fake).mean()
+        softmax = torch.nn.Softmax(dim=1)
+        bceloss = torch.nn.BCELoss()
+        p_fake_discriminator = softmax(self.D(self.augment_pipe(self.render(fake.detach(), batch))))   # [B, 4], [C_t, A_t, C_f, A_f]
+
+        p_fake = torch.clamp(torch.sum(p_fake_discriminator[:, 2:], dim = 1), min=0.0, max=1.0)                     # take only the false probabilities
+
+        ones = torch.ones(len(p_fake)).to(self.device)
+        fake_tf_loss = bceloss(p_fake, ones)
+
+        p_fake_class = torch.clamp(p_fake_discriminator[:, :2] + p_fake_discriminator[:, 2:], min=0.0, max=1.0)     # [B, 2], [C, A]
+        fake_cls_loss = torch.nn.functional.cross_entropy(p_fake_class, gt_label).mean()
+        fake_loss = fake_tf_loss + fake_cls_loss
         self.manual_backward(fake_loss)
 
-        p_real = self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch)))
+        p_real_discriminator = softmax(self.D(self.augment_pipe(self.train_set.get_color_bg_real(batch))))
+        p_real = torch.clamp(torch.sum(p_real_discriminator[:, :2], dim = 1), min=0.0, max=1.0)                     # take only the false probabilities
+
         self.augment_pipe.accumulate_real_sign(p_real.sign().detach())
+        
+        real_tf_loss = bceloss(p_real, ones)
 
-        # Get discriminator loss
-        real_loss = torch.nn.functional.softplus(-p_real).mean()
+        p_real_class = torch.clamp(p_real_discriminator[:, :2] + p_real_discriminator[:, 2:], min=0.0, max=1.0)     # [B, 2], [C, A]
+        
+        real_cls_loss = torch.nn.functional.cross_entropy(p_real_class, gt_label).mean()
+        
+        real_loss = real_tf_loss + real_cls_loss
         self.manual_backward(real_loss)
-
         step(d_opt, self.D)
 
         self.log("D_real", real_loss, on_step=True, on_epoch=False, prog_bar=False, logger=True, sync_dist=True)

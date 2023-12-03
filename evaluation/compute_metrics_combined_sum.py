@@ -93,26 +93,27 @@ def evaluate_our_gan(config):
     E.eval()
     F.eval()
 
-    for iter_idx, batch in enumerate(tqdm(eval_loader)):
-        eval_batch = to_device(batch, device)
-        shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        ### NEW ###
-        with torch.no_grad():
+    with torch.no_grad():
+        for iter_idx, batch in enumerate(tqdm(eval_loader)):
+            eval_batch = to_device(batch, device)
+            shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
+            ### NEW ###
             feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        shape = [c+f for c, f in zip(shape, feature)]
-        ###########
-        for z_idx in range(num_latent):
-            z = torch.randn(config.batch_size, config.latent_dim).to(device)
-            fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
-            fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
-            for batch_idx in range(fake_render.shape[0]):
-                save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
+            # shape = [c+f for c, f in zip(shape, feature)]
+            shape[-1] += feature[-1]
+            ###########
+            for z_idx in range(num_latent):
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
+                fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
+                fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
+                for batch_idx in range(fake_render.shape[0]):
+                    save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
 
     odir_real = Path("./output/combined")
     odir_fake = OUTPUT_DIR_OURS
     fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
-    file_name = './combined_sum_withfeature.txt'
+    file_name = './combined_sum_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
         file.write(f'[Epoch: {EPOCH}] FID: {fid_score:.4f}, KID: {kid_score:.4f}')
 
@@ -126,7 +127,7 @@ def evaluate_our_gan_car(config):
     from model.graph import TwinGraphEncoder, TwinGraphFeature
     from dataset.meshcar_real_features_ff2 import FaceGraphMeshDataset
     from torch_ema import ExponentialMovingAverage
-    # config.batch_size = 1
+    config.batch_size = 2
     config.views_per_sample = 2
     config.image_size = 256
     config.render_size = 512
@@ -162,26 +163,27 @@ def evaluate_our_gan_car(config):
     E.eval()
     F.eval()
 
-    for iter_idx, batch in enumerate(tqdm(eval_loader)):
-        eval_batch = to_device(batch, device)
-        shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        ### NEW ###
-        with torch.no_grad():
+    with torch.no_grad():
+        for iter_idx, batch in enumerate(tqdm(eval_loader)):
+            eval_batch = to_device(batch, device)
+            shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
+            ### NEW ###
             feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        shape = [c+f for c, f in zip(shape, feature)]
-        ###########
-        for z_idx in range(num_latent):
-            z = torch.randn(config.batch_size, config.latent_dim).to(device)
-            fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
-            fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
-            for batch_idx in range(fake_render.shape[0]):
-                save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
+            # shape = [c+f for c, f in zip(shape, feature)]
+            shape[-1] += feature[-1]
+            ###########
+            for z_idx in range(num_latent):
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
+                fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
+                fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
+                for batch_idx in range(fake_render.shape[0]):
+                    save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
 
     odir_real = Path("./output/cars_real")
     odir_fake = OUTPUT_DIR_OURS
     fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
-    file_name = './combined_sum_car.txt'
+    file_name = './combined_sum_car_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
         file.write(f'[Epoch: {EPOCH}] FID: {fid_score:.4f}, KID: {kid_score:.4f}\n')
 
@@ -232,26 +234,27 @@ def evaluate_our_gan_chair(config):
     E.eval()
     F.eval()
 
-    for iter_idx, batch in enumerate(tqdm(eval_loader)):
-        eval_batch = to_device(batch, device)
-        shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        ### NEW ###
-        with torch.no_grad():
+    with torch.no_grad():
+        for iter_idx, batch in enumerate(tqdm(eval_loader)):
+            eval_batch = to_device(batch, device)
+            shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
+            ### NEW ###
             feature, _ = F(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        shape = [c+f for c, f in zip(shape, feature)]
-        ###########
-        for z_idx in range(num_latent):
-            z = torch.randn(config.batch_size, config.latent_dim).to(device)
-            fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
-            fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
-            for batch_idx in range(fake_render.shape[0]):
-                save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
+            # shape = [c+f for c, f in zip(shape, feature)]
+            shape[-1] += feature[-1]
+            ###########
+            for z_idx in range(num_latent):
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
+                fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
+                fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
+                for batch_idx in range(fake_render.shape[0]):
+                    save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
 
     odir_real = Path("./output/chair_real")
     odir_fake = OUTPUT_DIR_OURS
     fid_score = fid.compute_fid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
     kid_score = fid.compute_kid(str(odir_real), str(odir_fake), device="cuda", num_workers=0)
-    file_name = './combined_sum_chair.txt'
+    file_name = './combined_sum_chair_{}.txt'.format(EXP_NAME)
     with open(file_name, 'a+') as file:
         file.write(f'[Epoch: {EPOCH}] FID: {fid_score:.4f}, KID: {kid_score:.4f}')
 
@@ -260,15 +263,30 @@ def evaluate_our_gan_chair(config):
 
 def main():
     global EXP_NAME, EPOCH, EMA
-    EXP_NAME = "12110622_StyleGAN23D-Combined-Feature-sum_fast_dev"
-    epochs = [4+5*i for i in range(10, 17)]
-    emas = ["000099817", "000108891", "000117965", "000127040", "000136114", "000145189",
-            "000154263"]
+    # EXP_NAME = "20111013_StyleGAN23D-Combined-Feature-sum_fast_dev"
+    EXP_NAME = "26110948_StyleGAN23D-Combined-Feature-sum_fast_dev"
+    # epochs = [i for i in range(4, 60, 5)]
+    epochs = [59, 44, 49, 64, 54, 39, 75]
+    # epochs.reverse()
+    emas = {4:"000009074", 9:"000018149", 
+            14:"000027223", 19:"000036297", 
+            24:"000045371", 29:"000054445", 
+            34:"000063520", 39:"000072594",
+            44:"000081669", 49:"000090743", 
+            54:"000099817", 59:"000108891", 
+            64:"000117965", 69:"000127040", 
+            74:"000136114", 79:"000145189",
+            84:"000154263", 89:"000163337", 
+            94:"000172411", 99:"000181485", 
+            104:"000190560", 109:"000199634",
+            114:"000208709", 119:"000217783",
+            124:"000226857", 129:"000235931",
+            134:"000245005", 139:"000254080",}
 
-    for epoch, ema in zip(epochs, emas):
-        EPOCH, EMA = epoch, ema
-        evaluate_our_gan()
-        # result2 = evaluate_our_gan_car()
+    for epoch in epochs:
+        EPOCH, EMA = epoch, emas[epoch]
+        # evaluate_our_gan()
+        evaluate_our_gan_car()
         # result3 = evaluate_our_gan_chair()
         
 

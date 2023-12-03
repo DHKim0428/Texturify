@@ -267,9 +267,7 @@ class StyleGAN2Trainer(pl.LightningModule):
         ### NEW ###
         with torch.no_grad():
             feature, _ = self.F(batch['x'], batch['graph_data']['ff2_maps'][0], batch['graph_data'])
-        # batch['shape'] = [c+f for c, f in zip(code, feature)]
-        batch['shape'] = code
-        batch['shape'][-1] += feature[-1]
+        batch['shape'] = [c+f for c, f in zip(code, feature)]
 
     def train_dataloader(self):
         return GraphDataLoader(self.train_set, self.config.batch_size, shuffle=True, pin_memory=True, drop_last=True, num_workers=self.config.num_workers)

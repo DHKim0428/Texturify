@@ -142,3 +142,4 @@ dmypy.json
 
 killgpu.sh
 pid.txt
+record/

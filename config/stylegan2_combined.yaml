@@ -42,8 +42,8 @@ val_check_interval: 5
 resume: null
 
 num_mapping_layers: 5
-lr_g: 0.002
-lr_d: 0.001
+lr_g: 0.001 # 0.002
+lr_d: 0.0002 # 0.001
 lr_e: 0.0001
 lazy_gradient_penalty_interval: 16
 lazy_path_penalty_after: 0
@@ -94,7 +94,7 @@ num_vis_meshes: 64
 batch_size: 4
 views_per_sample: 2
 random_views: False
-num_workers: 16
+num_workers: 8
 optimize_lights: False
 optimize_shininess: False
 

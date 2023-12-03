@@ -149,15 +149,16 @@ def evaluate_our_gan_car(config):
     G.eval()
     E.eval()
     
-    for iter_idx, batch in enumerate(tqdm(eval_loader)):
-        eval_batch = to_device(batch, device)
-        shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        for z_idx in range(num_latent):
-            z = torch.randn(config.batch_size, config.latent_dim).to(device)
-            fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
-            fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
-            for batch_idx in range(fake_render.shape[0]):
-                save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
+    with torch.no_grad():
+        for iter_idx, batch in enumerate(tqdm(eval_loader)):
+            eval_batch = to_device(batch, device)
+            shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
+            for z_idx in range(num_latent):
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
+                fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
+                fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
+                for batch_idx in range(fake_render.shape[0]):
+                    save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
 
     odir_real = Path("./output/cars_real")
     odir_fake = OUTPUT_DIR_OURS
@@ -270,15 +271,16 @@ def evaluate_our_gan_chair(config):
     G.eval()
     E.eval()
 
-    for iter_idx, batch in enumerate(tqdm(eval_loader)):
-        eval_batch = to_device(batch, device)
-        shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
-        for z_idx in range(num_latent):
-            z = torch.randn(config.batch_size, config.latent_dim).to(device)
-            fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
-            fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
-            for batch_idx in range(fake_render.shape[0]):
-                save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
+    with torch.no_grad():
+        for iter_idx, batch in enumerate(tqdm(eval_loader)):
+            eval_batch = to_device(batch, device)
+            shape = E(eval_batch['x'], eval_batch['graph_data']['ff2_maps'][0], eval_batch['graph_data'])
+            for z_idx in range(num_latent):
+                z = torch.randn(config.batch_size, config.latent_dim).to(device)
+                fake = G(eval_batch['graph_data'], z, shape, noise_mode='const')
+                fake_render = render_faces(R, fake, eval_batch, config.render_size, config.image_size)
+                for batch_idx in range(fake_render.shape[0]):
+                    save_image(fake_render[batch_idx], OUTPUT_DIR_OURS / f"{iter_idx}_{batch_idx}_{z_idx}.jpg", value_range=(-1, 1), normalize=True)
 
     odir_real = Path("./output/chair_real")
     odir_fake = OUTPUT_DIR_OURS
@@ -293,16 +295,43 @@ def evaluate_our_gan_chair(config):
 
 def main():
     global EXP_NAME, EPOCH, EMA
-    # EXP_NAME = "28101158_StyleGAN23D-Combined_fast_dev"
-    # epochs = [4+5*i for i in range(19)]
-    # emas = ["000009074", "000018149", "000027223", "000036297", "000045371", "000054445", "000063520", "000072594",
-    #         "000081669", "000090743", "000099817", "000108891", "000117965", "000127040", "000136114", "000145189",
-    #         "000154263", "000163337", "000172411"]
+    EXP_NAME = "22111714_StyleGAN23D-Combined-Discriminator_fast_dev"
+    # epochs = [i for i in range(4, 140, 5)]
+    # emas = ["000009074", "000018149", 
+    #         "000027223", "000036297", 
+    #         "000045371", "000054445", 
+    #         "000063520", "000072594",
+    #         "000081669", "000090743", 
+    #         "000099817", "000108891", 
+    #         "000117965", "000127040", 
+    #         "000136114", "000145189",
+    #         "000154263", "000163337", 
+    #         "000172411", "000181485", 
+    #         "000190560", "000199634",
+    #         "000208709", "000217783",
+    #         "000226857", "000235931",
+    #         "000245005", "000254080"]
+    epochs = [69]
+    emas = {4:"000009074", 9:"000018149", 
+            14:"000027223", 19:"000036297", 
+            24:"000045371", 29:"000054445", 
+            34:"000063520", 39:"000072594",
+            44:"000081669", 49:"000090743", 
+            54:"000099817", 59:"000108891", 
+            64:"000117965", 69:"000127040", 
+            74:"000136114", 79:"000145189",
+            84:"000154263", 89:"000163337", 
+            94:"000172411", 99:"000181485", 
+            104:"000190560", 109:"000199634",
+            114:"000208709", 119:"000217783",
+            124:"000226857", 129:"000235931",
+            134:"000245005", 139:"000254080",}
 
 
-    # for epoch, ema in zip(epochs, emas):
-    #     EPOCH, EMA = epoch, ema
-    #     evaluate_our_gan()
+    for epoch in epochs:
+        EPOCH = epoch
+        EMA = emas[epoch]
+        evaluate_our_gan_chair()
     #     print(epoch, ema)
     #     result2 = evaluate_our_gan_car()
     #     result3 = evaluate_our_gan_chair()
@@ -312,12 +341,12 @@ def main():
     # evaluate_our_gan_car()
     # # evaluate_our_gan_chair()
 
-    EXP_NAME = "12110622_StyleGAN23D-Combined-Feature-sum_fast_dev"
-    EPOCH = 49
-    EMA = "000090743"
-    evaluate_our_gan()
-    evaluate_our_gan_car()
-    evaluate_our_gan_chair()
+    # EXP_NAME = "12110622_StyleGAN23D-Combined-Feature-sum_fast_dev"
+    # EPOCH = 49
+    # EMA = "000090743"
+    # evaluate_our_gan()
+    # evaluate_our_gan_car()
+    # evaluate_our_gan_chair()
     
         
 

@@ -253,6 +253,7 @@ class StyleGAN2Trainer(pl.LightningModule):
             # self.log(f"kid", kid_score, on_step=False, on_epoch=True, prog_bar=False, logger=True, rank_zero_only=True, sync_dist=True)
         
         shutil.rmtree(odir_real.parent)
+        torch.cuda.empty_cache()
 
     def get_mapped_latent(self, z, style_mixing_prob):
         if torch.rand(()).item() < style_mixing_prob:

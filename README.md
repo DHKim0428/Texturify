@@ -96,7 +96,7 @@ Available [here](https://www.dropbox.com/scl/fi/cz9arygdbz05gucapldd1/texturify_
 
 ## Our Checkpoints
 
-Available [here](https://naver.com/).
+Available [here](https://drive.google.com/file/d/13K_KxlDT1esfVII78_tpgUAuS59rjeWs/view?usp=drive_link).
 
 To test our checkpoints, create a folder named `checkpoints` under the project root directory.
 Unzip the aforementioned checkpoints file into the `checkpoints` folder. 
